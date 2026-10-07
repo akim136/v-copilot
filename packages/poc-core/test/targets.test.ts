@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseTargetsConfig } from '../src/targets';
@@ -22,7 +22,22 @@ describe('targets.config.json', () => {
     }
   });
 
+  it('points every fixture at its own Pages path and an existing fixture source', () => {
+    for (const [key, t] of Object.entries(parseTargetsConfig(raw))) {
+      if (t.kind !== 'fixture') continue;
+      expect(new URL(t.url).pathname).toBe(`/v-copilot/${key}/`);
+      const source = fileURLToPath(new URL(`../../../fixtures/prospects/${key.replace(/^prospect-/, '')}/index.html`, import.meta.url));
+      expect(existsSync(source), source).toBe(true);
+    }
+  });
+
+  it('accepts written permission', () => {
+    expect(() => parseTargetsConfig({ a: { url: 'https://example.com/', permission: 'written', kind: 'control' } })).not.toThrow();
+  });
+
   it.each([
+    ['unknown kind', { a: { url: 'https://example.com/', permission: 'owned', kind: 'other' } }],
+    ['not a url', { a: { url: 'example', permission: 'owned', kind: 'fixture' } }],
     ['http url', { a: { url: 'http://example.com/', permission: 'owned', kind: 'fixture' } }],
     ['missing permission', { a: { url: 'https://example.com/', kind: 'fixture' } }],
     ['unknown permission', { a: { url: 'https://example.com/', permission: 'maybe', kind: 'fixture' } }],

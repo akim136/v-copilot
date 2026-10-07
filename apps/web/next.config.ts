@@ -1,8 +1,6 @@
 import type { NextConfig } from 'next';
 import { withWorkflow } from 'workflow/next';
 
-const nextConfig: NextConfig = {
-  transpilePackages: ['@v-copilot/poc-core'],
-};
+const nextConfig: NextConfig = {};
 
 export default withWorkflow(nextConfig);

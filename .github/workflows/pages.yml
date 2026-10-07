@@ -3,13 +3,16 @@ name: fixtures-pages
 on:
   push:
     branches: [main]
-    paths: ['fixtures/prospects/**', '.github/workflows/pages.yml']
+    paths:
+      - 'fixtures/prospects/**'
+      - '.github/workflows/pages.yml'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.nvmrc'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -26,6 +29,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter @v-copilot/fixtures...
+      - run: pnpm --filter @v-copilot/fixtures test
       - run: pnpm --filter @v-copilot/fixtures build:pages
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -33,6 +37,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

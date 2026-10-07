@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { beforeAll, describe, expect, it } from 'vitest';
 // @ts-expect-error untyped build script
-import { build, FIXTURES, referencedAssets } from '../build.mjs';
+import { assetKind, build, FIXTURES } from '../build.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -42,7 +42,7 @@ describe.each(FIXTURES as string[])('fixture %s', (name) => {
   const $ = load(html);
 
   it('has the page landmarks and exactly one h1', () => {
-    for (const tag of ['nav', 'header', 'main', 'footer']) expect($(tag).length, tag).toBeGreaterThan(0);
+    for (const sel of ['body > header nav', 'body > main', 'body > footer']) expect($(sel), sel).toHaveLength(1);
     expect($('h1')).toHaveLength(1);
     expect($('html').attr('lang')).toBe('en');
   });
@@ -91,13 +91,22 @@ describe('fixture build', () => {
     outB = await build(mkdtempSync(join(tmpdir(), 'fixtures-b-')));
   }, 120_000);
 
-  it('produces every referenced asset', () => {
+  it('produces every file the page references', () => {
     for (const name of FIXTURES as string[]) {
-      const html = readFileSync(join(outA, `prospect-${name}`, 'index.html'), 'utf8');
-      for (const asset of referencedAssets(html) as string[]) {
-        expect(existsSync(join(outA, `prospect-${name}`, 'assets', asset)), asset).toBe(true);
-      }
+      const dir = join(outA, `prospect-${name}`);
+      const $ = load(readFileSync(join(dir, 'index.html'), 'utf8'));
+      const refs = [
+        ...$('img[src], script[src]').map((_, el) => el.attribs.src).get(),
+        ...$('link[href]').map((_, el) => el.attribs.href).get(),
+      ];
+      expect(refs.length).toBeGreaterThan(4);
+      for (const ref of refs) expect(existsSync(join(dir, ref)), `${name}: ${ref}`).toBe(true);
     }
+  });
+
+  it('refuses asset types it cannot generate', () => {
+    expect(() => assetKind('diagram.svg')).toThrow(/unsupported/);
+    expect(assetKind('hero.jpg')).toBe('image');
   });
 
   it('ships an oversized hero image and heavy vendor script', () => {

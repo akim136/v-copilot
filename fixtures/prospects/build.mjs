@@ -1,7 +1,7 @@
 // Builds the prospect fixtures into dist/prospect-<name>/ for GitHub Pages.
 // The pages are deliberately slow: oversized images with no dimensions, a large
 // render-blocking script and stylesheet, and a late banner that shifts layout.
-// Output is deterministic so the same commit always serves the same bytes.
+// Output is deterministic for a given commit and platform (Pages always builds on ubuntu).
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,6 +13,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export function referencedAssets(html) {
   return [...new Set([...html.matchAll(/(?:src|href)="assets\/([^"]+)"/g)].map((m) => m[1]))];
+}
+
+const SHARED_ASSETS = new Set(['vendor.js', 'widgets.js', 'bloat.css']);
+
+export function assetKind(name) {
+  if (SHARED_ASSETS.has(name)) return 'shared';
+  if (/^[a-z0-9-]+\.(png|jpg)$/.test(name)) return 'image';
+  throw new Error(`unsupported fixture asset: ${name}`);
 }
 
 function rng(seedText) {
@@ -85,7 +93,7 @@ export async function build(outDir = join(here, 'dist')) {
     copyFileSync(join(here, 'shared', 'styles.css'), join(dir, 'styles.css'));
     for (const asset of referencedAssets(html)) {
       const target = join(dir, 'assets', asset);
-      if (asset in shared) writeFileSync(target, shared[asset]);
+      if (assetKind(asset) === 'shared') writeFileSync(target, shared[asset]);
       else writeFileSync(target, await renderImage(asset));
     }
     links.push(`<li><a href="prospect-${name}/">prospect-${name}</a></li>`);

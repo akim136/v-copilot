@@ -12,8 +12,7 @@
 - **Model spend to date:** $0.00.
 
 ## Investigation record (kickoff steps 2–8)
-- Package versions and confirmed API surface: see the approved plan
-  (`~/.claude/plans/pasted-content-id-ba72-v-copilot-structured-stearns.md`), summarized:
+- Package versions confirmed from npm on 2026-10-07:
   workflow 5.1.0, ai 7.0.130, @vercel/sdk 1.28.41, @vercel/sandbox 3.5.1, @vercel/blob 2.8.1,
   chat + @chat-adapter/telegram 4.41.1, lighthouse 13.5.0, zod 4.6.5, next 16.4.0.
 - Models: no dated snapshots exist; pinned `openai/gpt-5.6-terra` and `openai/gpt-5.6-luna`
