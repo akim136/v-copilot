@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -117,6 +117,17 @@ describe('fixture build', () => {
       expect(statSync(join(outA, `prospect-${name}`, 'assets/vendor.js')).size).toBeGreaterThan(200_000);
     }
   });
+
+  it('refuses to clear a directory it did not produce', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fixtures-foreign-'));
+    writeFileSync(join(dir, 'keep.txt'), 'not ours');
+    await expect(build(dir)).rejects.toThrow(/refusing to clear/);
+    expect(existsSync(join(dir, 'keep.txt'))).toBe(true);
+  });
+
+  it('rebuilds over its own previous output', async () => {
+    await expect(build(outA)).resolves.toBe(outA);
+  }, 60_000);
 
   it('is deterministic', () => {
     expect(hashTree(outA)).toEqual(hashTree(outB));

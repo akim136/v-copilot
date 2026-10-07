@@ -1,9 +1,32 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": [".next/**", "!.next/cache/**", "dist/**"] },
-    "typecheck": { "dependsOn": ["^build"] },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
     "lint": {},
-    "test": { "dependsOn": ["^build"] }
+    "test": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "@v-copilot/web#typecheck": {
+      "dependsOn": [
+        "^build",
+        "build"
+      ]
+    }
   }
 }

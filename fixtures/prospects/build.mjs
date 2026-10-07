@@ -3,7 +3,7 @@
 // render-blocking script and stylesheet, and a late banner that shifts layout.
 // Output is deterministic for a given commit and platform (Pages always builds on ubuntu).
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -81,8 +81,17 @@ function bloatCss() {
   return rules.join('\n') + '\n';
 }
 
-export async function build(outDir = join(here, 'dist')) {
+// Only clear a directory this script produced (marked by .nojekyll) or an empty one.
+function clearOutDir(outDir) {
+  if (!existsSync(outDir)) return;
+  if (readdirSync(outDir).length > 0 && !existsSync(join(outDir, '.nojekyll'))) {
+    throw new Error(`refusing to clear ${outDir}: not a fixture build output`);
+  }
   rmSync(outDir, { recursive: true, force: true });
+}
+
+export async function build(outDir = join(here, 'dist')) {
+  clearOutDir(outDir);
   const shared = { 'vendor.js': vendorJs(), 'widgets.js': widgetsJs(), 'bloat.css': bloatCss() };
   const links = [];
   for (const name of FIXTURES) {
