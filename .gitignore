@@ -10,3 +10,6 @@ dist/
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+# codex-review keeps its cross-run finding ledger here
+.codex-review/
