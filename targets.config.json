@@ -1,0 +1,8 @@
+{
+  "prospect-landing": { "url": "https://akim136.github.io/v-copilot/prospect-landing/", "permission": "owned", "kind": "fixture" },
+  "prospect-docs":    { "url": "https://akim136.github.io/v-copilot/prospect-docs/",    "permission": "owned", "kind": "fixture" },
+  "prospect-catalog": { "url": "https://akim136.github.io/v-copilot/prospect-catalog/", "permission": "owned", "kind": "fixture" },
+  "prospect-blog":    { "url": "https://akim136.github.io/v-copilot/prospect-blog/",    "permission": "owned", "kind": "fixture" },
+  "akimbuilds":       { "url": "https://akimbuilds.com/",                                "permission": "owned", "kind": "control" },
+  "stagger":          { "url": "https://stagger.dev/",                                   "permission": "owned", "kind": "control" }
+}

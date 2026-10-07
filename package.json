@@ -1,0 +1,23 @@
+{
+  "name": "v-copilot",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "poc": "pnpm --filter @v-copilot/web poc"
+  },
+  "devDependencies": {
+    "turbo": "2.11.7",
+    "typescript": "^5.9.0",
+    "eslint": "^9.30.0",
+    "@eslint/js": "^9.30.0",
+    "typescript-eslint": "^8.40.0",
+    "globals": "^16.0.0"
+  }
+}
