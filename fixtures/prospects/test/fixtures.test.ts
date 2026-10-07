@@ -125,6 +125,13 @@ describe('fixture build', () => {
     expect(existsSync(join(dir, 'keep.txt'))).toBe(true);
   });
 
+  it('does not treat a generic Pages directory as its own output', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fixtures-pages-'));
+    writeFileSync(join(dir, '.nojekyll'), '');
+    writeFileSync(join(dir, 'keep.txt'), 'not ours');
+    await expect(build(dir)).rejects.toThrow(/refusing to clear/);
+  });
+
   it('rebuilds over its own previous output', async () => {
     await expect(build(outA)).resolves.toBe(outA);
   }, 60_000);
