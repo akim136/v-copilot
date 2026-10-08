@@ -132,6 +132,13 @@ describe('fixture build', () => {
     await expect(build(dir)).rejects.toThrow(/refusing to clear/);
   });
 
+  it('can rebuild after a build that failed partway', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fixtures-partial-'));
+    await expect(build(dir, ['landing', 'does-not-exist'])).rejects.toThrow(/ENOENT/);
+    expect(existsSync(join(dir, 'prospect-landing', 'index.html'))).toBe(true);
+    await expect(build(dir, ['landing'])).resolves.toBe(dir);
+  }, 60_000);
+
   it('rebuilds over its own previous output', async () => {
     await expect(build(outA)).resolves.toBe(outA);
   }, 60_000);
