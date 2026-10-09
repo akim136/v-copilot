@@ -37,4 +37,3 @@ export async function getReadyBot() {
 
 export const alexChatThread = () => `telegram:${required('TELEGRAM_CHAT_ID')}`;
 export const isAlex = (userId: string) => userId === required('TELEGRAM_ALEX_USER_ID');
-export const RUN_ID = /^wrun_[0-9A-Z]{26}$/;

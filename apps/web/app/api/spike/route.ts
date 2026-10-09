@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getRun, start } from 'workflow/api';
-import { RUN_ID } from '@/lib/telegram';
+import { RUN_ID } from '@/lib/run-id';
 import { spikeGate } from '@/workflows/spike-gate';
 
 const notFound = () => new Response('Not found', { status: 404 });

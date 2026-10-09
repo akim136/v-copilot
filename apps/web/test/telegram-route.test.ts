@@ -15,7 +15,6 @@ vi.mock('workflow/errors', () => ({ HookNotFoundError }));
 vi.mock('workflow/api', () => ({ resumeHook: h.resumeHook }));
 vi.mock('@/workflows/spike-gate', () => ({ spikeToken: (id: string) => `spike:${id}` }));
 vi.mock('@/lib/telegram', () => ({
-  RUN_ID: /^wrun_[0-9A-Z]{26}$/,
   isAlex: (id: string) => id === '1234567890',
   getBot: () => ({
     onAction: (_ids: string[], fn: (e: unknown) => Promise<void>) => void (h.handler = fn),

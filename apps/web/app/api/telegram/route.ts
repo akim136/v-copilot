@@ -1,6 +1,7 @@
 import { resumeHook } from 'workflow/api';
 import { HookNotFoundError } from 'workflow/errors';
-import { getBot, isAlex, RUN_ID } from '@/lib/telegram';
+import { RUN_ID } from '@/lib/run-id';
+import { getBot, isAlex } from '@/lib/telegram';
 import { spikeToken, type SpikeDecision } from '@/workflows/spike-gate';
 
 let registered = false;
