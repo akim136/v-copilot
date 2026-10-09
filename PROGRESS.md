@@ -28,7 +28,9 @@
 ### Carry into P3
 - Posting from a workflow step must `await bot.initialize()` first (memory state is otherwise unconnected).
 - A step that sends a message and then throws is retried and re-sends it (Alex got duplicate cards).
-  Make send steps idempotent or non-retrying after the send succeeds.
+  Fixed in P1 for gate cards: step 1 posts the prompt without buttons and checkpoints its message ID,
+  step 2 adds the buttons by editing that message ("message is not modified" on a retry = done), so a
+  run never has two pressable cards. Reuse this pattern for both M1/M2 gates.
 - Telegram webhook URL = branch alias + `?x-vercel-protection-bypass=…`; the secret is in
   `apps/web/.env.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`.
 
