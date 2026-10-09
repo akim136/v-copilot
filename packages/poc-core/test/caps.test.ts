@@ -12,6 +12,12 @@ describe('CAPS', () => {
 });
 
 describe('spendLast24h', () => {
+  it('fails closed on a negative or unreadable cost instead of lowering the total', () => {
+    const rows = [{ costUsd: 7, startedAt: hoursAgo(1) }, { costUsd: -5, startedAt: hoursAgo(1) }];
+    expect(checkDailyCap(spendLast24h(rows, now)).ok).toBe(false);
+    expect(checkDailyCap(spendLast24h([{ costUsd: Number.NaN, startedAt: hoursAgo(1) }], now)).ok).toBe(false);
+  });
+
   it('sums runs that ended inside the window and skips older ones', () => {
     const rows = [
       { costUsd: 1, startedAt: hoursAgo(30), endedAt: hoursAgo(23) },

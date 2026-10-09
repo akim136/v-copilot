@@ -227,6 +227,7 @@ interface Outline {
   images: { id: string; src: string; alt: string; width: number; height: number; content: boolean }[];
   landmarks: { kind: 'nav' | 'header' | 'main' | 'section' | 'footer'; childIds: string[] }[];
   scripts: { host: string; bytes: number; blocking: boolean }[];
+  order: string[];                                 // every heading, text block and image ID in document order
 }
 
 type PageSpec = {
@@ -264,14 +265,15 @@ type RunStatus = 'intake' | 'baselining' | 'analyzing' | 'awaiting_criteria' | '
 type Metric = 'performance' | 'lcp' | 'cls' | 'tbt' | 'fcp' | 'ttfb' | 'jsBytes' | 'accessibility' | 'seo';
 
 interface PocReport {
-  runId: string; target: string; kind: 'fixture' | 'control'; url: string;
-  permission: 'owned' | 'written'; mode: 'plan' | 'full' | 'eval'; status: RunStatus;
+  runId: string; target: string; url: string;      // url is the request as given on a not_allowlisted rejection
+  kind?: 'fixture' | 'control'; permission?: 'owned' | 'written';   // absent only on a not_allowlisted rejection
+  mode: 'plan' | 'full' | 'eval'; status: RunStatus;
   success?: boolean;                               // all criteria met and fidelity >= 0.9
   rejectReason?: 'not_allowlisted' | 'daily_cap';
   brief: string;
   criteria: { id: string; metric: Metric; baseline: number; target: number;
               rationale: string; result?: number; met?: boolean }[];
-  baseline: { lighthouse: Record<Metric, number>; runs: number; psiField?: Record<string, number> };
+  baseline?: { lighthouse: Record<Metric, number>; runs: number; psiField?: Record<string, number> };  // from planned on
   preview?: { lighthouse: Record<Metric, number>; runs: number };
   fidelity?: { score: number; headings: number; text: number; images: number; order: number;
                missing: string[]; retried: boolean };

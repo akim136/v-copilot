@@ -6,6 +6,11 @@ const median: MetricValues = { performance: 61, lcp: 18329.984, cls: 0.1267, tbt
 const d = (metric: DraftCriterion['metric'], target: number, baseline = 0, rationale = 'Oversized hero image is the LCP element.'): DraftCriterion => ({ metric, baseline, target, rationale });
 
 describe('reconcileCriteria', () => {
+  it('clips a long rationale without splitting a character', () => {
+    const { criteria } = reconcileCriteria([d('lcp', 2500, 0, `${'a'.repeat(199)}😀 more`)], median);
+    expect(criteria[0]!.rationale).toBe('a'.repeat(199));
+  });
+
   it('sets each baseline to the measured median and numbers the criteria', () => {
     const { criteria, dropped } = reconcileCriteria([d('lcp', 2500, 12345), d('performance', 90)], median);
     expect(dropped).toEqual([]);

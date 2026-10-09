@@ -1,15 +1,17 @@
 import { z } from 'zod';
+import type { AllowedTarget } from './allowlist';
 import { METRICS, type Metric, type MetricValues, type Opportunity } from './schemas';
 
 export const LIGHTHOUSE_RUNS = 3;
-const MAX_OPPORTUNITIES = 20;
+// Per category, so failing performance audits can't crowd accessibility and SEO out of analyze's input.
+const MAX_OPPORTUNITIES = { performance: 12, accessibility: 4, seo: 4 } as const;
 
 // Mobile is Lighthouse's default form factor; simulated throttling keeps run-to-run spread small.
-export function lighthouseArgs(url: string, outputPath: string): string[] {
-  if (new URL(url).protocol !== 'https:') throw new Error('Lighthouse only measures https URLs');
+export function lighthouseArgs(target: AllowedTarget, outputPath: string): string[] {
+  if (new URL(target.url).protocol !== 'https:') throw new Error('Lighthouse only measures https URLs');
   if (!/^\/tmp\/[\w.-]+\.json$/.test(outputPath)) throw new Error('Lighthouse output must be a JSON file in /tmp');
   return [
-    url,
+    target.url,
     '--quiet',
     '--output=json',
     `--output-path=${outputPath}`,
@@ -43,7 +45,9 @@ const LhrSchema = z.object({
     'first-contentful-paint': numeric,
     'server-response-time': numeric,
     'network-requests': z.object({
-      details: z.object({ items: z.array(z.object({ resourceType: z.string().optional(), transferSize: z.number().nonnegative().optional() })) }),
+      details: z.object({ items: z.array(z.object({
+        url: z.string().optional(), resourceType: z.string().optional(), transferSize: z.number().nonnegative().optional(),
+      })) }),
     }),
   }),
 });
@@ -52,12 +56,16 @@ export interface LighthouseRun {
   lighthouseVersion: string;
   metrics: MetricValues;
   opportunities: Opportunity[];
+  // Transfer bytes per script URL; the outline groups these by host.
+  scriptBytes: Record<string, number>;
 }
 
 function opportunities(lhr: z.infer<typeof LhrSchema>): Opportunity[] {
   const found: Opportunity[] = [];
   for (const name of ['performance', 'accessibility', 'seo'] as const) {
+    let kept = 0;
     for (const ref of lhr.categories[name].auditRefs) {
+      if (kept === MAX_OPPORTUNITIES[name]) break;
       // Performance: failing insights and diagnostics. Accessibility and SEO: failing weighted audits.
       if (name === 'performance' ? !['insights', 'diagnostics'].includes(ref.group ?? '') : ref.weight <= 0) continue;
       const parsed = audit.safeParse(lhr.audits[ref.id]);
@@ -66,6 +74,7 @@ function opportunities(lhr: z.infer<typeof LhrSchema>): Opportunity[] {
       const failing = a.score !== null && a.score < (name === 'performance' ? 0.9 : 1)
         && ['metricSavings', 'numeric', 'binary'].includes(a.scoreDisplayMode);
       if (!failing) continue;
+      kept += 1;
       found.push({
         id: ref.id,
         category: name,
@@ -75,7 +84,7 @@ function opportunities(lhr: z.infer<typeof LhrSchema>): Opportunity[] {
       });
     }
   }
-  return found.slice(0, MAX_OPPORTUNITIES);
+  return found;
 }
 
 // Reads one Lighthouse JSON result into the nine tracked metrics. Scores become 0–100.
@@ -83,9 +92,10 @@ export function parseLighthouseResult(input: unknown): LighthouseRun {
   const lhr = LhrSchema.parse(input);
   if (lhr.runtimeError) throw new Error('Lighthouse reported a runtime error');
   const a = lhr.audits;
-  const jsBytes = a['network-requests'].details.items
-    .filter((i) => i.resourceType === 'Script')
-    .reduce((sum, i) => sum + (i.transferSize ?? 0), 0);
+  const scripts = a['network-requests'].details.items.filter((i) => i.resourceType === 'Script');
+  const jsBytes = scripts.reduce((sum, i) => sum + (i.transferSize ?? 0), 0);
+  const scriptBytes: Record<string, number> = {};
+  for (const i of scripts) if (i.url) scriptBytes[i.url] = (scriptBytes[i.url] ?? 0) + (i.transferSize ?? 0);
   return {
     lighthouseVersion: lhr.lighthouseVersion,
     metrics: {
@@ -100,6 +110,7 @@ export function parseLighthouseResult(input: unknown): LighthouseRun {
       seo: Math.round(lhr.categories.seo.score * 100),
     },
     opportunities: opportunities(lhr),
+    scriptBytes,
   };
 }
 

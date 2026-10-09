@@ -59,3 +59,10 @@ What I expected: `thread.post()` to initialize the instance lazily, as webhook h
 Severity: slowdown
 Suggested fix: call `ensureInitialized()` inside `post()`, or document that non-webhook senders must call `chat.initialize()` first.
 Links: chat@4.41.1, run wrun_41M4GCT4ZK0GG1908JWPTXY2YW
+
+## 2026-10-09 · Milestone 1 · AI SDK
+What happened: `generateText` retries a failed call twice by default (`maxRetries: 2`), and only the last attempt's usage reaches the result, so a caller that checks a spend cap once per call can pay for three requests and count one. With structured output and no tools it also still sends `toolChoice: { type: 'auto' }`.
+What I expected: retries to be opt-in, or the result to carry the usage of every attempt.
+Severity: slowdown (found in review; we set `maxRetries: 0` and retry through our own cap-checked wrapper)
+Suggested fix: document the retry default next to usage accounting, and report per-attempt usage on `RetryError`.
+Links: ai@7.0.130

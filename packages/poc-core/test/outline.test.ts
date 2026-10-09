@@ -64,6 +64,14 @@ describe('extractOutline rules', () => {
     expect(o.textBlocks.map((t) => t.text)).toEqual(['Item A bold', 'Sub', 'Loose link text']);
   });
 
+  it('keeps phrasing elements such as wbr, font, ruby and picture sources inside one text block', () => {
+    const o = extractOutline(page(
+      '<p>super<wbr>long and <font color="red">red</font> <ruby>漢<rp>(</rp><rt>kan</rt><rp>)</rp></ruby> <tt>tt</tt>'
+      + ' <picture><source srcset="x.webp"><img src="x.jpg"></picture> after <input value="v"> end</p>',
+    ), { baseUrl: BASE });
+    expect(o.textBlocks.map((t) => t.text)).toEqual(['superlong and red 漢(kan) tt after end']);
+  });
+
   it('treats an inline element wrapping blocks as transparent', () => {
     const o = extractOutline(page('<a href="/x"><div><h3>Card</h3><p>Card body</p></div></a>'), { baseUrl: BASE });
     expect(o.headings.map((h) => h.text)).toEqual(['Card']);
@@ -73,7 +81,8 @@ describe('extractOutline rules', () => {
   it('never takes text from scripts, styles, hidden or embedded content', () => {
     const o = extractOutline(page(
       '<p>Visible</p><script>var secret = 1</script><style>p{}</style><noscript>ns</noscript><div hidden>gone</div>'
-      + '<template><p>tpl</p></template><svg><text>svg</text></svg><textarea>ta</textarea>',
+      + '<template><p>tpl</p></template><svg><text>svg</text></svg><textarea>ta</textarea>'
+      + '<noembed><a href="x">ne</a></noembed><noframes><p>nf</p></noframes>',
       '<title>Page title</title>',
     ), { baseUrl: BASE });
     expect(o.textBlocks.map((t) => t.text)).toEqual(['Visible']);
@@ -93,11 +102,14 @@ describe('extractOutline rules', () => {
     expect(t!.preview.endsWith('…')).toBe(true);
   });
 
-  it('resolves image sources and skips data URIs and missing sources', () => {
+  it('resolves image sources and skips data URIs, non-web schemes and missing sources', () => {
     const o = extractOutline(page(
-      '<img src="data:image/gif;base64,R0lGOD" data-src="lazy.jpg"><img srcset="s.jpg 1x, s2.jpg 2x"><img alt="no src"><img src="/abs.png">',
+      '<img src="data:image/gif;base64,R0lGOD" data-src="lazy.jpg"><img srcset="s.jpg 1x, s2.jpg 2x"><img alt="no src"><img src="/abs.png">'
+      + '<img src="javascript:alert(1)"><img src="file:///etc/hosts"><img src="blob:https://example.com/x"><img srcset="t.jpg, t2.jpg 2x">',
     ), { baseUrl: BASE });
-    expect(o.images.map((i) => i.src)).toEqual(['https://example.com/a/lazy.jpg', 'https://example.com/a/s.jpg', 'https://example.com/abs.png']);
+    expect(o.images.map((i) => i.src)).toEqual([
+      'https://example.com/a/lazy.jpg', 'https://example.com/a/s.jpg', 'https://example.com/abs.png', 'https://example.com/a/t.jpg',
+    ]);
   });
 
   it('flags content images by size, preferring tag dimensions over intrinsic ones', () => {
@@ -108,23 +120,28 @@ describe('extractOutline rules', () => {
       ['https://example.com/a/tiny.png', { width: 32, height: 32 }],
     ]);
     const o = extractOutline(page(
-      '<img src="big.png"><img src="icon.png" width="24" height="24"><img src="strip.png"><img src="tiny.png"><img src="unknown.png">',
+      '<img src="big.png"><img src="icon.png" width="24" height="24"><img src="strip.png"><img src="tiny.png"><img src="unknown.png">'
+      + '<img src="banner.png" height="80"><img src="big.png" width="40"><img src="pixel.gif" width="0" height="0">',
     ), { baseUrl: BASE, imageSizes });
     expect(o.images.map((i) => [i.width, i.height, i.content])).toEqual([
       [800, 600, true], [24, 24, false], [1200, 40, true], [32, 32, false], [0, 0, true],
+      // An unknown side (0) may be large, so it counts as content; one tag side scales by the intrinsic ratio.
+      [0, 80, true], [40, 30, false], [0, 0, false],
     ]);
   });
 
   it('groups scripts by host with sizes and render-blocking status', () => {
     const scriptBytes = new Map([['https://cdn.example.net/lib.js', 5000], ['https://example.com/a/app.js', 700]]);
     const o = extractOutline(page(
-      '<script src="app.js" defer></script><script>console.log(1)</script><script type="application/ld+json">{}</script>',
+      '<script src="app.js" defer></script><script>console.log(1)</script><script type="application/ld+json">{}</script>'
+      + '<script type="application/x-javascript">a()</script><script type="text/ecmascript">b()</script>',
       '<script src="https://cdn.example.net/lib.js"></script><script src="app.js" async></script><script type="module" src="m.js"></script>',
     ), { baseUrl: BASE, scriptBytes });
     expect(o.scripts).toEqual([
       { host: 'cdn.example.net', bytes: 5000, blocking: true },
-      { host: 'example.com', bytes: 1400, blocking: false },
-      { host: 'inline', bytes: 14, blocking: false },
+      // app.js is included twice but fetched once.
+      { host: 'example.com', bytes: 700, blocking: false },
+      { host: 'inline', bytes: 20, blocking: false },
     ]);
   });
 
@@ -134,6 +151,11 @@ describe('extractOutline rules', () => {
       + '<div role="contentinfo"><p>Legal</p></div>',
     ), { baseUrl: BASE });
     expect(o.landmarks.map((l) => [l.kind, l.childIds.length])).toEqual([['header', 1], ['main', 0], ['section', 2], ['footer', 1]]);
+  });
+
+  it('lists landmark children in document order', () => {
+    const o = extractOutline(page('<section><p>Before <img src="x.png"> after</p><h2>Next</h2></section>'), { baseUrl: BASE });
+    expect(o.landmarks[0]!.childIds).toEqual(o.order);
   });
 });
 

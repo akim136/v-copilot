@@ -7,7 +7,7 @@ export const SECTION_KINDS = [
 ] as const;
 
 // Model-facing schema: every field required and no extra keys, so it works with strict structured outputs.
-// Lengths and counts are enforced in code afterwards (see reconcileCriteria).
+// Criteria are checked in code afterwards (reconcileCriteria); sections and opportunities are not yet.
 export const AnalyzeOutputSchema = z.strictObject({
   sections: z.array(z.strictObject({ kind: z.enum(SECTION_KINDS), name: z.string(), ids: z.array(z.string()) })),
   opportunities: z.array(z.strictObject({ title: z.string(), detail: z.string(), metrics: z.array(MetricSchema) })),
@@ -33,7 +33,7 @@ Inputs.
 - ${INPUT_TAG}.brief: what the operator wants this proof of concept to show. Use it to choose which metrics matter most.
 - ${INPUT_TAG}.baseline.median: the median of several Lighthouse runs on the mobile profile with simulated throttling. ${INPUT_TAG}.baseline.runs is how many runs the median covers. ${INPUT_TAG}.baseline.psiField, when present, is real-user field data from PageSpeed Insights, given as context only.
 - ${INPUT_TAG}.opportunities: failing Lighthouse audits, each with its category, title, display value and estimated savings in milliseconds per metric.
-- ${OUTLINE_TAG}: headings (ID, level 1 to 4, text), text blocks (ID, a preview truncated to 280 characters, and the full length in characters), images (ID, alt text, width and height in pixels where known, and whether the image counts as content), landmarks (nav, header, main, section or footer, each with the IDs it contains), scripts grouped by host with transfer bytes and whether they block rendering, and order, the list of every heading, text block and image ID in document order.
+- ${OUTLINE_TAG}: headings (ID, level 1 to 4, text), text blocks (ID, a preview truncated to 280 characters, and the full length in characters), images (ID, alt text, width and height in pixels with 0 meaning unknown, and whether the image counts as content), landmarks (nav, header, main, section or footer, each listing in document order the IDs for which it is the nearest enclosing landmark), scripts grouped by host with transfer bytes and whether they block rendering (host "inline" is script written into the HTML itself, counted in source bytes), and order, the list of every heading, text block and image ID in document order.
 
 Metrics. Every criterion uses one of these metric names, in these units.
 - performance: Lighthouse performance score, 0 to 100, higher is better.
@@ -86,10 +86,11 @@ export interface AnalyzeInput {
 
 // The run-specific part of the prompt. The untrusted outline is always the last thing in it.
 export function buildAnalyzePrompt(input: AnalyzeInput): string {
+  const { median, runs, psiField } = input.baseline;
   const runInput = {
     target: { name: input.target.name, kind: input.target.kind },
     brief: input.brief,
-    baseline: input.baseline,
+    baseline: { median, runs, ...(psiField ? { psiField } : {}) },
     opportunities: input.opportunities,
   };
   return [

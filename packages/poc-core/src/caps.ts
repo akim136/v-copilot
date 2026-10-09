@@ -16,26 +16,28 @@ export type CapCheck =
 
 const valid = (usd: number) => Number.isFinite(usd) && usd >= 0;
 
-// Model spend of runs that ended (or, if still unfinished, started) within the last 24 hours.
+// Model spend of indexed runs that ended in the last 24 hours. Each run writes its row when it ends; a row
+// without endedAt is dated by startedAt.
 export function spendLast24h(rows: readonly Pick<RunIndexRow, 'costUsd' | 'startedAt' | 'endedAt'>[], now: Date): number {
   const since = now.getTime() - CAPS.dailyWindowMs;
   let total = 0;
   for (const row of rows) {
+    // An unreadable cost or timestamp fails closed: NaN is refused, and an undated row counts as recent.
+    if (!valid(row.costUsd)) return Number.NaN;
     const at = Date.parse(row.endedAt ?? row.startedAt);
-    // An unreadable timestamp counts as recent: the ceiling fails closed.
     if (Number.isNaN(at) || at > since) total += row.costUsd;
   }
   return total;
 }
 
-// A new run is refused when the last 24 hours already hold $8 or more.
 export function checkDailyCap(spentLast24hUsd: number): CapCheck {
   if (valid(spentLast24hUsd) && spentLast24hUsd < CAPS.dailyUsd) return { ok: true };
   return { ok: false, reason: 'daily_cap', spentUsd: spentLast24hUsd, limitUsd: CAPS.dailyUsd };
 }
 
 // Checked before every model call: the run stops once it has passed $1.50, and the run's own spend
-// counts toward the 24-hour ceiling because it is not in the index until the run ends.
+// counts toward the 24-hour ceiling because it is not in the index until the run ends. Other runs still in
+// flight are not in the index either; each is bounded by its own per-run cap.
 export function checkBeforeModelCall(budget: { runCostUsd: number; dailySpendUsd: number }): CapCheck {
   const { runCostUsd, dailySpendUsd } = budget;
   if (!valid(runCostUsd) || runCostUsd > CAPS.perRunUsd) {

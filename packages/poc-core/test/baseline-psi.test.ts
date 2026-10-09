@@ -31,20 +31,23 @@ describe('fetchPsiField', () => {
   const KEY = 'psi-test-key-0000';
 
   const respond = (status: number, body: unknown) => {
-    const calls: URL[] = [];
-    const fetchFn = (async (input: URL) => {
-      calls.push(input);
+    const calls: { url: URL; headers: Headers }[] = [];
+    const fetchFn = (async (input: URL, init?: RequestInit) => {
+      calls.push({ url: input, headers: new Headers(init?.headers) });
       return new Response(JSON.stringify(body), { status });
     }) as unknown as typeof fetch;
     return { calls, fetchFn };
   };
 
-  it('asks for mobile performance data for the target URL, with the key when given', async () => {
+  it('asks for mobile performance data for the target URL, with the key in a header, never the URL', async () => {
     const { calls, fetchFn } = respond(200, {});
     await fetchPsiField(target, { apiKey: KEY, fetch: fetchFn });
-    const url = calls[0]!;
+    const { url, headers } = calls[0]!;
     expect(`${url.origin}${url.pathname}`).toBe(PSI_ENDPOINT);
-    expect(Object.fromEntries(url.searchParams)).toEqual({ url: LANDING, strategy: 'mobile', category: 'performance', key: KEY });
+    // Request URLs end up in traces, so the key travels only in the header.
+    expect(Object.fromEntries(url.searchParams)).toEqual({ url: LANDING, strategy: 'mobile', category: 'performance' });
+    expect(url.href).not.toContain(KEY);
+    expect(headers.get('x-goog-api-key')).toBe(KEY);
   });
 
   it('returns URL-level field percentiles, with CLS rescaled', async () => {

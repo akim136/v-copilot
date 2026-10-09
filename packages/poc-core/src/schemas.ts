@@ -71,6 +71,8 @@ export const BaselineSchema = z.strictObject({
   runs: z.array(MetricValuesSchema).min(1),
   median: MetricValuesSchema,
   opportunities: z.array(OpportunitySchema),
+  // From the median run, so a cached baseline still gives the outline its script sizes.
+  scriptBytes: z.record(z.string(), value),
   psiField: PsiFieldSchema.optional(),
 });
 export type Baseline = z.infer<typeof BaselineSchema>;
@@ -111,6 +113,8 @@ export const RunIndexRowSchema = z.strictObject({
 });
 export type RunIndexRow = z.infer<typeof RunIndexRowSchema>;
 
+const MEASURED: readonly RunStatus[] = ['planned', 'reported', 'released'];
+
 // The Milestone 1 subset of the spec's PocReport (no preview, fidelity, diffs or share link yet).
 export const PocReportSchema = z.strictObject({
   runId: z.string(),
@@ -133,5 +137,13 @@ export const PocReportSchema = z.strictObject({
   costUsd: value,
   tokens: z.strictObject({ input: z.number().int().nonnegative(), cachedInput: z.number().int().nonnegative(), output: z.number().int().nonnegative() }),
   timingsMs: z.record(z.string(), value),
+}).superRefine((r, ctx) => {
+  const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
+  if ((r.status === 'rejected') !== (r.rejectReason !== undefined)) issue('rejectReason is set exactly when status is rejected');
+  if (r.rejectReason !== 'not_allowlisted') {
+    if (!r.kind || !r.permission) issue('an allowlisted target has a kind and a permission');
+    if (!z.url().safeParse(r.url).success) issue('an allowlisted target has a URL');
+  }
+  if (MEASURED.includes(r.status) && !r.baseline) issue(`a ${r.status} report has a baseline`);
 });
 export type PocReport = z.infer<typeof PocReportSchema>;

@@ -1,6 +1,7 @@
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -9,21 +10,22 @@ import {
   recordingKey, ReplayMissError, type ModelCall,
 } from '../src/model-wrapper';
 import { MODELS } from '../src/models';
-import { costUsd } from '../src/pricing';
+import { costUsd, inputTokenUpperBound } from '../src/pricing';
+import { takeNetworkAttempts } from './network-guard';
 
 type GenerateResult = Awaited<ReturnType<MockLanguageModelV4['doGenerate']>>;
 
 const Schema = z.object({ verdict: z.string(), score: z.number() });
 const USAGE = { inputTokens: { total: 5000, noCache: 3000, cacheRead: 2000, cacheWrite: undefined }, outputTokens: { total: 400, text: 300, reasoning: 100 } };
 
-function mock(text = JSON.stringify({ verdict: 'ok', score: 7 })) {
+function mock(text = JSON.stringify({ verdict: 'ok', score: 7 }), usage: GenerateResult['usage'] = USAGE, modelId: string = MODELS.terra) {
   const result: GenerateResult = {
     content: [{ type: 'text', text }],
     finishReason: { unified: 'stop', raw: 'stop' },
-    usage: USAGE,
+    usage,
     warnings: [],
   };
-  return new MockLanguageModelV4({ doGenerate: async () => result });
+  return new MockLanguageModelV4({ modelId, doGenerate: async () => result });
 }
 
 function call(overrides: Partial<ModelCall<z.infer<typeof Schema>>> = {}): ModelCall<z.infer<typeof Schema>> {
@@ -36,6 +38,11 @@ function call(overrides: Partial<ModelCall<z.infer<typeof Schema>>> = {}): Model
 }
 
 const expectedCost = costUsd(MODELS.terra, { inputTokens: 5000, cachedInputTokens: 2000, cacheWriteTokens: 0, outputTokens: 400 });
+// The most a call could have cost: every possible input token billed as a cache write, plus full output.
+const worstCase = (c: ModelCall<unknown>) => {
+  const input = inputTokenUpperBound(c.system, c.prompt);
+  return costUsd(MODELS.terra, { inputTokens: input, cachedInputTokens: 0, cacheWriteTokens: input, outputTokens: MAX_OUTPUT_TOKENS });
+};
 
 describe('callModel', () => {
   it('records a structured call with no tools and prices it from the table', async () => {
@@ -113,8 +120,56 @@ describe('callModel', () => {
     expect((err as ModelCallError).span.costUsd).toBe(expectedCost);
   });
 
+  it('charges the worst case and keeps the request body out of the error when a call fails', async () => {
+    const model = new MockLanguageModelV4({
+      modelId: MODELS.terra,
+      doGenerate: async () => {
+        throw new APICallError({ message: 'upstream unavailable', url: 'https://gateway.test/v1', requestBodyValues: { prompt: 'Rate this.' }, statusCode: 503, isRetryable: true });
+      },
+    });
+    const c = call({ model });
+    const err = await callModel(c).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ModelCallError);
+    expect((err as ModelCallError).span.costUsd).toBe(worstCase(c));
+    expect(JSON.stringify({ m: (err as Error).message, c: (err as Error).cause })).not.toContain('Rate this.');
+    // One request per call: a retry goes back through callModel and its cap check.
+    expect(model.doGenerateCalls).toHaveLength(1);
+  }, 15_000);
+
+  it('charges the worst case when the response carries no token usage', async () => {
+    const none = { inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: undefined, text: undefined, reasoning: undefined } };
+    const c = call({ model: mock(undefined, none) });
+    const err = await callModel(c).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ModelCallError);
+    expect((err as ModelCallError).span.costUsd).toBe(worstCase(c));
+  });
+
+  it('keeps the cost of a paid call when its recording cannot be written', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rec-'));
+    writeFileSync(join(dir, 'file'), '');
+    const err = await callModel(call({ model: mock(), recordingsDir: join(dir, 'file') })).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ModelCallError);
+    expect((err as ModelCallError).span.costUsd).toBe(expectedCost);
+  });
+
+  it('records two identical calls made at once', async () => {
+    const c = call({ model: mock() });
+    const [a, b] = await Promise.all([callModel(c), callModel({ ...c, model: mock() })]);
+    expect(a.output).toEqual(b.output);
+    expect(readdirSync(c.recordingsDir)).toEqual([`${recordingKey(MODELS.terra, c.system, c.prompt, Schema)}.json`]);
+  });
+
+  it('refuses a model override that is not the step\'s pinned model', async () => {
+    const model = mock(undefined, USAGE, 'openai/some-other-model');
+    await expect(callModel(call({ model }))).rejects.toThrow(/pinned/);
+    expect(model.doGenerateCalls).toHaveLength(0);
+  });
+
   it('never reaches the network when no mock model is given', async () => {
-    await expect(callModel(call({ mode: 'live' }))).rejects.toThrow();
+    const err = await callModel(call({ mode: 'live' })).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ModelCallError);
+    // The guard in test/setup.ts stopped the Gateway request.
+    expect(takeNetworkAttempts()).toBe(1);
   });
 });
 

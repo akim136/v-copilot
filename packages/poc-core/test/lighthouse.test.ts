@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { checkAllowlist, type AllowedTarget } from '../src/allowlist';
 import { lighthouseArgs, median, medianMetrics, medianRun, parseLighthouseResult, type LighthouseRun } from '../src/lighthouse';
+import { extractOutline } from '../src/outline';
 import type { MetricValues } from '../src/schemas';
+import { parseTargetsConfig } from '../src/targets';
 
 // Trimmed from a real Lighthouse 13.5.0 mobile run on prospect-landing (2026-10-09).
 type Lhr = { categories: Record<string, { score: number | null }>; audits: Record<string, unknown>; [key: string]: unknown };
@@ -27,6 +30,28 @@ describe('parseLighthouseResult', () => {
     expect(ids).not.toContain('performance:document-latency-insight'); // passed
     const blocking = parseLighthouseResult(lhr()).opportunities.find((o) => o.id === 'render-blocking-insight');
     expect(blocking).toMatchObject({ title: 'Render-blocking requests', savings: { FCP: 1400 } });
+  });
+
+  it('keeps accessibility and SEO opportunities when many performance audits fail', () => {
+    const big = lhr();
+    const perf = big.categories.performance as unknown as { auditRefs: { id: string; weight: number; group?: string }[] };
+    for (let i = 0; i < 25; i++) {
+      perf.auditRefs.push({ id: `extra-${i}`, weight: 0, group: 'insights' });
+      big.audits[`extra-${i}`] = { title: `Extra ${i}`, score: 0, scoreDisplayMode: 'metricSavings', metricSavings: { LCP: 100 } };
+    }
+    const found = parseLighthouseResult(big).opportunities;
+    expect(found.filter((o) => o.category === 'accessibility').length).toBeGreaterThan(0);
+    expect(found.filter((o) => o.category === 'seo').length).toBeGreaterThan(0);
+    expect(found.length).toBeLessThanOrEqual(20);
+  });
+
+  it('gives per-script transfer sizes that the outline groups by host', () => {
+    const run = parseLighthouseResult(lhr());
+    const base = 'https://akim136.github.io/v-copilot/prospect-landing/';
+    expect(run.scriptBytes).toEqual({ [`${base}assets/vendor.js`]: 59226, [`${base}assets/widgets.js`]: 450 });
+    const html = readFileSync(new URL('../../../fixtures/prospects/landing/index.html', import.meta.url), 'utf8');
+    const o = extractOutline(html, { baseUrl: base, scriptBytes: new Map(Object.entries(run.scriptBytes)) });
+    expect(o.scripts).toEqual([{ host: 'akim136.github.io', bytes: run.metrics.jsBytes, blocking: true }]);
   });
 
   it('rejects a run with a runtime error', () => {
@@ -65,14 +90,20 @@ describe('medians', () => {
   });
 
   it('picks the run with the median performance score', () => {
-    const run = (performance: number): LighthouseRun => ({ lighthouseVersion: '13.5.0', metrics: { ...parseLighthouseResult(lhr()).metrics, performance }, opportunities: [] });
+    const run = (performance: number): LighthouseRun => ({ lighthouseVersion: '13.5.0', metrics: { ...parseLighthouseResult(lhr()).metrics, performance }, opportunities: [], scriptBytes: {} });
     expect(medianRun([run(70), run(50), run(60)]).metrics.performance).toBe(60);
   });
 });
 
 describe('lighthouseArgs', () => {
+  const LANDING = 'https://akim136.github.io/v-copilot/prospect-landing/';
+  const r = checkAllowlist(parseTargetsConfig({ 'prospect-landing': { url: LANDING, permission: 'owned', kind: 'fixture' } }), 'prospect-landing');
+  const landing = (r.ok ? r.target : undefined) as AllowedTarget;
+  // Only an allowlisted target type-checks; the runtime checks below still hold for anything cast to one.
+  const forged = (url: string) => ({ url }) as unknown as AllowedTarget;
+
   it('puts the URL first and writes JSON for the three categories on the mobile default', () => {
-    const args = lighthouseArgs('https://akim136.github.io/v-copilot/prospect-landing/', '/tmp/lh-1.json');
+    const args = lighthouseArgs(landing, '/tmp/lh-1.json');
     expect(args[0]).toBe('https://akim136.github.io/v-copilot/prospect-landing/');
     expect(args).toContain('--output-path=/tmp/lh-1.json');
     expect(args).toContain('--only-categories=performance,accessibility,seo');
@@ -85,6 +116,6 @@ describe('lighthouseArgs', () => {
     ['path outside /tmp', 'https://example.com/', '/etc/passwd'],
     ['path traversal', 'https://example.com/', '/tmp/../etc/x.json'],
   ])('rejects %s', (_label, url, out) => {
-    expect(() => lighthouseArgs(url, out)).toThrow();
+    expect(() => lighthouseArgs(forged(url), out)).toThrow();
   });
 });

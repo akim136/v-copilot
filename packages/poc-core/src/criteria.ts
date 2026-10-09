@@ -7,6 +7,16 @@ export const METRIC_DIRECTION: Readonly<Record<Metric, 'higher' | 'lower'>> = Ob
 export const MAX_CRITERIA = 5;
 const SCORES = new Set<Metric>(['performance', 'accessibility', 'seo']);
 
+// At most max UTF-16 units (the schema's length), never splitting a character.
+function clip(s: string, max: number): string {
+  let out = '';
+  for (const ch of s) {
+    if (out.length + ch.length > max) break;
+    out += ch;
+  }
+  return out;
+}
+
 export interface DraftCriterion { metric: Metric; baseline: number; target: number; rationale: string }
 
 // Turns the model's draft criteria into approved-ready ones. Code owns the baseline (the measured
@@ -16,7 +26,7 @@ export function reconcileCriteria(draft: readonly DraftCriterion[], median: Metr
   const dropped: { metric: string; reason: string }[] = [];
   for (const d of draft) {
     const baseline = median[d.metric];
-    const rationale = d.rationale.replace(/\s+/g, ' ').trim().slice(0, 200);
+    const rationale = clip(d.rationale.replace(/\s+/g, ' ').trim(), 200);
     const better = METRIC_DIRECTION[d.metric] === 'higher' ? d.target > baseline : d.target < baseline;
     let reason: string | undefined;
     if (criteria.some((c) => c.metric === d.metric)) reason = 'duplicate metric';

@@ -3,7 +3,7 @@ import type { AllowedTarget } from './allowlist';
 
 export const PSI_ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
-// Never carries the request URL, which may hold the API key.
+// Never carries the request URL or headers.
 export class PsiError extends Error {
   override name = 'PsiError';
 }
@@ -25,11 +25,12 @@ export async function fetchPsiField(
   request.searchParams.set('url', target.url);
   request.searchParams.set('strategy', 'mobile');
   request.searchParams.set('category', 'performance');
-  if (opts.apiKey) request.searchParams.set('key', opts.apiKey);
+  // The key goes in a header: request URLs end up in traces.
+  const headers: Record<string, string> = opts.apiKey ? { 'x-goog-api-key': opts.apiKey } : {};
 
   let res: Response;
   try {
-    res = await (opts.fetch ?? fetch)(request, { signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000) });
+    res = await (opts.fetch ?? fetch)(request, { headers, signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000) });
   } catch (err) {
     throw new PsiError(`PSI request failed: ${(err as Error)?.name ?? 'error'}`);
   }
