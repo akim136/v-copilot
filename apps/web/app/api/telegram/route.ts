@@ -1,4 +1,3 @@
-import { after } from 'next/server';
 import { resumeHook } from 'workflow/api';
 import { HookNotFoundError } from 'workflow/errors';
 import { getBot, isAlex, RUN_ID } from '@/lib/telegram';
@@ -29,7 +28,17 @@ function register() {
   });
 }
 
+// Resume the hook before acknowledging Telegram: if it fails, a 500 makes Telegram redeliver,
+// and a redelivery after a partial success only reaches the disposed hook ("already handled").
 export async function POST(req: Request) {
   register();
-  return getBot().webhooks.telegram(req, { waitUntil: (task) => after(task) });
+  const tasks: Promise<unknown>[] = [];
+  const res = await getBot().webhooks.telegram(req, { waitUntil: (t) => void tasks.push(t), propagateHandlerErrors: true });
+  try {
+    await Promise.all(tasks);
+  } catch (err) {
+    console.error('telegram: action failed', (err as Error)?.name);
+    return new Response('action failed', { status: 500 });
+  }
+  return res;
 }

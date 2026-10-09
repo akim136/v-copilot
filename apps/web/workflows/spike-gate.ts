@@ -36,8 +36,13 @@ async function sendGateCard(runId: string) {
   );
 }
 
+// Best effort: the decision is already consumed, so a failed confirmation must not fail the gate.
 async function sendOutcome(runId: string, decision: string) {
   'use step';
-  const { alexChatThread, getReadyBot } = await import('@/lib/telegram');
-  await (await getReadyBot()).thread(alexChatThread()).post(`Run ${runId}: ${decision} recorded.`);
+  try {
+    const { alexChatThread, getReadyBot } = await import('@/lib/telegram');
+    await (await getReadyBot()).thread(alexChatThread()).post(`Run ${runId}: ${decision} recorded.`);
+  } catch (err) {
+    console.error('spike: outcome message failed', (err as Error)?.message);
+  }
 }

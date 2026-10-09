@@ -13,6 +13,7 @@ const VCPUS = 2;
 
 const targets = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'targets.config.json'), 'utf8'));
 const url: string = targets['prospect-landing'].url;
+if (new URL(url).protocol !== 'https:') throw new Error('target must be https');
 
 async function sh(sbx: Sandbox, script: string, sudo = false) {
   const res = await sbx.runCommand({ cmd: 'bash', args: ['-lc', script], sudo });
@@ -57,8 +58,15 @@ async function run(n: number) {
     const chrome = (await sh(sbx, 'find / -name chrome -type f -path "*chrome-linux*" 2>/dev/null | head -1', true)).trim();
     for (let i = 0; i < n; i++) {
       const s = Date.now();
-      await sh(sbx, `CHROME_PATH=${chrome} lighthouse '${url}' --quiet --output=json --output-path=/tmp/lh-${i}.json ` +
-        `--only-categories=performance,accessibility,seo --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage"`, true);
+      // Pass the URL as an argument, never through a shell string.
+      const res = await sbx.runCommand({
+        cmd: 'lighthouse',
+        args: [url, '--quiet', '--output=json', `--output-path=/tmp/lh-${i}.json`,
+          '--only-categories=performance,accessibility,seo', '--chrome-flags=--headless=new --no-sandbox --disable-dev-shm-usage'],
+        env: { CHROME_PATH: chrome },
+        sudo: true,
+      });
+      if (res.exitCode !== 0) throw new Error(`lighthouse exit ${res.exitCode}: ${(await res.stderr()).slice(-2000)}`);
       const lhr = JSON.parse((await sbx.readFileToBuffer({ path: `/tmp/lh-${i}.json` }))!.toString('utf8'));
       const a = lhr.audits;
       const row = {
@@ -93,5 +101,9 @@ async function run(n: number) {
 
 const [cmd, arg] = process.argv.slice(2);
 if (cmd === 'prepare') await prepare();
-else if (cmd === 'run') await run(Number(arg ?? 5));
+else if (cmd === 'run') {
+  const n = Number(arg ?? 5);
+  if (!Number.isInteger(n) || n < 1 || n > 10) throw new Error('run count must be an integer from 1 to 10');
+  await run(n);
+}
 else throw new Error('usage: prepare | run [n]');
