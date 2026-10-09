@@ -28,6 +28,13 @@ export function getBot() {
   return bot;
 }
 
+// Posting outside a webhook (from a workflow step) must initialize the state adapter first.
+export async function getReadyBot() {
+  const b = getBot();
+  await b.initialize();
+  return b;
+}
+
 export const alexChatThread = () => `telegram:${required('TELEGRAM_CHAT_ID')}`;
 export const isAlex = (userId: string) => userId === required('TELEGRAM_ALEX_USER_ID');
 export const RUN_ID = /^wrun_[0-9A-Z]{26}$/;

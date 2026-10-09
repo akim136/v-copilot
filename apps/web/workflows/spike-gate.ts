@@ -21,8 +21,8 @@ export async function spikeGate() {
 async function sendGateCard(runId: string) {
   'use step';
   const { Actions, Button, Card, CardText } = await import('chat');
-  const { alexChatThread, getBot } = await import('@/lib/telegram');
-  await getBot().thread(alexChatThread()).post(
+  const { alexChatThread, getReadyBot } = await import('@/lib/telegram');
+  await (await getReadyBot()).thread(alexChatThread()).post(
     Card({
       title: 'v-copilot spike gate',
       children: [
@@ -38,6 +38,6 @@ async function sendGateCard(runId: string) {
 
 async function sendOutcome(runId: string, decision: string) {
   'use step';
-  const { alexChatThread, getBot } = await import('@/lib/telegram');
-  await getBot().thread(alexChatThread()).post(`Run ${runId}: ${decision} recorded.`);
+  const { alexChatThread, getReadyBot } = await import('@/lib/telegram');
+  await (await getReadyBot()).thread(alexChatThread()).post(`Run ${runId}: ${decision} recorded.`);
 }
