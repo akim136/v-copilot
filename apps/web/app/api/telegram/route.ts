@@ -20,7 +20,8 @@ function register() {
       await resumeHook(spikeToken(e.value), payload);
     } catch (err) {
       if (err instanceof HookNotFoundError || (err as Error)?.name === 'HookNotFoundError') {
-        await e.thread?.post(`Run ${e.value}: already handled.`);
+        // The gate is already consumed; the reply is a courtesy and must not trigger a redelivery.
+        await e.thread?.post(`Run ${e.value}: already handled.`).catch(() => {});
         return;
       }
       throw err;

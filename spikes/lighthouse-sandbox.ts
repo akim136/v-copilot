@@ -1,19 +1,21 @@
 // M1·P1 spike: can Lighthouse run inside a Vercel Sandbox, and how noisy is LCP?
-//   node --env-file=../.env.local lighthouse-sandbox.ts prepare   # install Chromium + Lighthouse, snapshot
-//   node --env-file=../.env.local lighthouse-sandbox.ts run [n]   # n mobile runs (default 5) from the snapshot
+//   pnpm --filter @v-copilot/spikes lighthouse prepare   # install Chromium + Lighthouse, snapshot
+//   pnpm --filter @v-copilot/spikes lighthouse run [n]   # n mobile runs (default 5) from the snapshot
 // Only measures `prospect-landing` from targets.config.json. Writes results to spikes/.out/.
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Sandbox } from '@vercel/sandbox';
+import { parseTargetsConfig } from '@v-copilot/poc-core';
 
 const OUT = join(import.meta.dirname, '.out');
 const SNAPSHOT_FILE = join(OUT, 'snapshot.json');
 const LIGHTHOUSE_VERSION = '13.5.0';
 const VCPUS = 2;
 
-const targets = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'targets.config.json'), 'utf8'));
-const url: string = targets['prospect-landing'].url;
-if (new URL(url).protocol !== 'https:') throw new Error('target must be https');
+const targets = parseTargetsConfig(JSON.parse(readFileSync(join(import.meta.dirname, '..', 'targets.config.json'), 'utf8')));
+const landing = targets['prospect-landing'];
+if (!landing) throw new Error('prospect-landing is not in targets.config.json');
+const url = landing.url;
 
 async function sh(sbx: Sandbox, script: string, sudo = false) {
   const res = await sbx.runCommand({ cmd: 'bash', args: ['-lc', script], sudo });
@@ -35,9 +37,9 @@ async function prepare() {
     mkdirSync(OUT, { recursive: true });
     writeFileSync(SNAPSHOT_FILE, JSON.stringify({ snapshotId: snap.snapshotId, createdAt: new Date().toISOString() }, null, 2));
     console.log('snapshot', snap.snapshotId);
-  } catch (err) {
+  } finally {
+    // snapshot() already stops the VM; this covers every other exit path.
     await sbx.stop().catch(() => {});
-    throw err;
   }
 }
 
