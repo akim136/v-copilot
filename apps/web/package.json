@@ -11,6 +11,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@chat-adapter/state-memory": "4.41.1",
+    "@chat-adapter/telegram": "4.41.1",
+    "chat": "4.41.1",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

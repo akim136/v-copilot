@@ -1,0 +1,11 @@
+{
+  "name": "@v-copilot/spikes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lighthouse": "node --env-file=../.env.local lighthouse-sandbox.ts"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "3.5.1"
+  }
+}
