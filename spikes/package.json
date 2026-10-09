@@ -1,0 +1,15 @@
+{
+  "name": "@v-copilot/spikes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lighthouse": "tsx --env-file=../.env.local lighthouse-sandbox.ts"
+  },
+  "dependencies": {
+    "@v-copilot/poc-core": "workspace:*",
+    "@vercel/sandbox": "3.5.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}

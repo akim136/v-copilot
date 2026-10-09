@@ -14,7 +14,7 @@ Links:
 ## 2026-10-07 · Milestone 1 · Workflow SDK
 What happened: `withWorkflow` silently adds a public `/.well-known/workflow/v1/webhook/[token]` route to the app. It is not obvious from the hooks docs whether a token created with `createHook` (not `createWebhook`) can be resumed through that public route, which matters when the token is derived from a run ID.
 What I expected: a clear statement in the hooks docs of which hook kinds are reachable over HTTP, and a recommendation for unguessable tokens on approval hooks.
-Severity: papercut (pending the P1 spike result)
+Severity: papercut — resolved in P1: the public route uses `resumeWebhook`, which refuses `createHook` tokens (verified live, 404)
 Suggested fix: document the reachability of `createHook` tokens via the webhook route next to the custom-token example.
 Links: workflow@5.1.0 `docs/` bundle
 
@@ -31,3 +31,31 @@ What I expected: guidance on a stateless webhook mode for bots that keep their o
 Severity: slowdown
 Suggested fix: show `state` in the quick start and document what breaks with memory state on Fluid compute.
 Links: chat@4.41.1, @chat-adapter/telegram@4.41.1
+
+## 2026-10-09 · Milestone 1 · Vercel deployments (Git integration)
+What happened: right after `vercel git connect`, the first push to a feature branch (`m1/p1-spikes`) was built with target `production` and aliased to `v-copilot.vercel.app`, because the project had no production deployment yet. `apps/web/vercel.json` already disabled deploys from `main`, and the production branch is `main`, so nothing in the config asked for this.
+What I expected: a push to a non-production branch to always produce a preview deployment.
+Severity: slowdown (protected by Vercel Authentication, and sensitive env vars are preview-only, so the spike build had none of them and could not run the test)
+Suggested fix: never auto-assign production to a non-production-branch build, or warn about it in `vercel git connect`.
+Links: deployment v-copilot-8vp93iufs-akim-projects.vercel.app (commit c48c65e)
+
+## 2026-10-09 · Milestone 1 · Vercel Blob
+What happened: connecting the private Blob store created `BLOB_READ_WRITE_TOKEN` as a `Config` (non-sensitive) variable on Production, Preview and Development, so `vercel env ls` prints the start of the token.
+What I expected: a read-write credential created as a sensitive variable, scoped to the environments I chose.
+Severity: papercut
+Suggested fix: create store tokens as sensitive by default and ask which environments to attach.
+Links: store_XvValUcqtyqZyI0i
+
+## 2026-10-09 · Milestone 1 · Vercel CLI
+What happened: `vercel env add NAME preview --sensitive` with the value piped on stdin failed silently in a loop on CLI 59.7, because it stopped to ask for a Git branch. Adding `--yes` fixed it.
+What I expected: a non-interactive stdin run to either use the all-branches default or exit with a clear error.
+Severity: slowdown
+Suggested fix: when stdin is not a TTY, apply defaults or fail loudly instead of waiting on a prompt.
+Links: vercel CLI 59.7.0
+
+## 2026-10-09 · Milestone 1 · Chat SDK
+What happened: posting a card from a Workflow step (not a webhook) failed with "MemoryStateAdapter is not connected. Call connect() first." after the message was already sent to Telegram, so the step's retries sent the card four times.
+What I expected: `thread.post()` to initialize the instance lazily, as webhook handling does, or to fail before sending anything.
+Severity: slowdown
+Suggested fix: call `ensureInitialized()` inside `post()`, or document that non-webhook senders must call `chat.initialize()` first.
+Links: chat@4.41.1, run wrun_41M4GCT4ZK0GG1908JWPTXY2YW
