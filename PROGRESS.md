@@ -1,9 +1,11 @@
 # Progress
 
 ## Status — 2026-10-09
-- **Milestone:** 1 (plan a POC), phase P1 (spikes) — both spikes pass; no stop-and-ask condition hit.
-- **Last completed:** P0 merged (PR #1, ff86261); fixture Pages URLs return 200. P1 spikes below.
-- **Next step:** codex-review loop and PR for `m1/p1-spikes`, then P2 (poc-core libraries).
+- **Milestone:** 1 (plan a POC), phase P2 (poc-core libraries) on branch `m1/p2-poc-core`.
+- **Last completed:** P1 merged (PR #2, 13bbfd5): Lighthouse-in-Sandbox and Telegram-gate spikes pass;
+  no Vercel deployment from `main`; fixture Pages URLs return 200.
+- **Next step:** P2 — allowlist, caps, outline, Lighthouse parsing and medians, baseline cache key, PSI
+  client, models, pricing, model wrapper, analyze prompt, zod schemas. Unit tests with mocks only.
 - **Blockers:** none. Open decision for Alex: the first Git deploy (feature branch, c48c65e) became the
   production deployment on `v-copilot.vercel.app` (protected; no sensitive vars; `/api/spike` 404s there).
 - **Model spend to date:** $0.00. Sandbox use: one prepare session + one 5-run session (~2.5 min, 2 vCPU).
@@ -32,7 +34,10 @@
   step 2 adds the buttons by editing that message ("message is not modified" on a retry = done), so a
   run never has two pressable cards. Reuse this pattern for both M1/M2 gates.
 - Telegram webhook URL = branch alias + `?x-vercel-protection-bypass=…`; the secret is in
-  `apps/web/.env.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`.
+  `apps/web/.env.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`. It still points at the `m1/p1-spikes`
+  alias; re-point it at the P3 branch alias.
+- From codex round 5 (deferred, non-blocking): route tests for a wrong-user press, an invalid run ID
+  and the reject mapping; give the `spikes` workspace a typecheck and lint script.
 
 ## Investigation record (kickoff steps 2–8)
 - Package versions confirmed from npm on 2026-10-07:
