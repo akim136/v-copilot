@@ -1,0 +1,15 @@
+node_modules/
+.next/
+dist/
+.turbo/
+.vercel/
+.workflow-data/
+.env*
+!.env.example
+*.log
+.DS_Store
+coverage/
+*.tsbuildinfo
+
+# codex-review keeps its cross-run finding ledger here
+.codex-review/

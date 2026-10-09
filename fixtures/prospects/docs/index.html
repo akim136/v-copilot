@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quillmate Docs — Getting started</title>
+  <meta name="description" content="Install the Quillmate SDK, authenticate, and send your first document for review.">
+  <link rel="stylesheet" href="assets/bloat.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="assets/vendor.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <nav aria-label="Primary">
+      <a class="logo" href="./"><img src="assets/quillmate-logo.png" alt="Quillmate"></a>
+      <ul>
+        <li><a href="#guides">Guides</a></li>
+        <li><a href="#api">API reference</a></li>
+        <li><a href="#changelog">Changelog</a></li>
+        <li><a href="#support">Support</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <h1>Getting started with the Quillmate SDK</h1>
+      <p>This guide walks you through installing the SDK, creating an API key, and sending your first document to a reviewer in under ten minutes.</p>
+      <img class="hero-image" src="assets/docs-diagram.jpg" alt="Diagram of a document moving from your app through Quillmate to a reviewer">
+    </section>
+
+    <section id="install" class="content">
+      <h2>Install the SDK</h2>
+      <p>The SDK supports Node.js 20 and later. Install it from the npm registry with your package manager of choice.</p>
+      <pre><code>npm install @quillmate/sdk</code></pre>
+      <p>If you deploy to a serverless platform, add the package to your production dependencies so it is bundled with your functions.</p>
+    </section>
+
+    <section id="auth" class="content">
+      <h2>Create an API key</h2>
+      <p>Open the dashboard, choose Settings and then API keys, and create a key scoped to the workspace you want to send documents from.</p>
+      <p>Store the key in an environment variable. Never commit it to source control or expose it in browser code.</p>
+      <img src="assets/docs-api-keys.jpg" alt="Screenshot of the API keys settings page">
+    </section>
+
+    <section id="first-document" class="content">
+      <h2>Send your first document</h2>
+      <p>Create a client with your key, upload a file, and request a review from one or more people by email address.</p>
+      <pre><code>const quill = new Quillmate({ apiKey: process.env.QUILLMATE_KEY });
+await quill.reviews.create({ file, reviewers: ['sam@example.com'] });</code></pre>
+      <p>The call returns a review ID. Reviewers receive an email with a link that opens the document in the Quillmate viewer.</p>
+    </section>
+
+    <section id="webhooks" class="content">
+      <h2>Listen for review events</h2>
+      <p>Register a webhook endpoint to receive an event whenever a reviewer comments, approves, or requests changes on a document.</p>
+      <p>Each event is signed. Verify the signature header with your webhook secret before trusting the payload.</p>
+      <img src="assets/docs-webhooks.jpg">
+    </section>
+
+    <section id="faq" class="faq">
+      <h2>Troubleshooting</h2>
+      <h3>My request returns 401</h3>
+      <p>Check that the API key belongs to the same workspace as the document and that it has not been revoked in the dashboard.</p>
+      <h3>Reviewers never get the email</h3>
+      <p>Ask reviewers to check their spam folder and add the Quillmate sending domain to their organization's allow list.</p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div>
+      <h4>Docs</h4>
+      <a href="#guides">Guides</a> <a href="#api">API reference</a> <a href="#sdks">SDKs</a>
+    </div>
+    <div>
+      <h4>Resources</h4>
+      <a href="#status">Status</a> <a href="#community">Community</a> <a href="#support">Support</a>
+    </div>
+    <p class="legal">© 2026 Quillmate. A fictional company used as a test fixture.</p>
+  </footer>
+  <script src="assets/widgets.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+body { margin: 0; font-family: Georgia, "Times New Roman", serif; color: #1f2328; background: #fbfaf7; line-height: 1.6; }
+.site-header nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #e5e2da; }
+.site-header ul { display: flex; gap: 16px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
+.site-header a { color: #1f2328; text-decoration: none; }
+.logo img { height: 32px; width: auto; }
+main { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+section, .post > header { padding: 40px 0; border-bottom: 1px solid #ece9e1; }
+.hero h1 { font-size: 2.4rem; line-height: 1.2; margin: 0 0 16px; }
+.hero-image, .content img, .products img { width: 100%; height: auto; display: block; margin: 20px 0; border-radius: 6px; }
+.logos img { height: 40px; width: auto; margin: 12px 20px 12px 0; }
+.features, .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+.features h2, .products h2 { grid-column: 1 / -1; }
+.button { display: inline-block; padding: 10px 18px; background: #7a3e9d; color: #fff; border-radius: 4px; text-decoration: none; margin: 8px 8px 0 0; }
+.button.ghost { background: transparent; color: #7a3e9d; border: 1px solid #7a3e9d; }
+.cta img { width: 100%; height: auto; margin-top: 20px; }
+blockquote { margin: 0; font-size: 1.2rem; font-style: italic; }
+pre { background: #24292f; color: #f6f8fa; padding: 12px; overflow-x: auto; border-radius: 4px; }
+.site-footer { display: flex; flex-wrap: wrap; gap: 40px; padding: 30px 20px; background: #f1eee7; }
+.site-footer a { margin-right: 12px; color: #57606a; }
+.legal { flex-basis: 100%; color: #8c959f; font-size: 0.85rem; }
+.promo-banner { background: #ffd33d; padding: 24px 20px; font-size: 1.1rem; }
