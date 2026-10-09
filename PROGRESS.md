@@ -1,15 +1,36 @@
 # Progress
 
-## Status — 2026-10-07
-- **Milestone:** 1 (plan a POC), phase P0 (scaffold + fixtures).
-- **Last completed acceptance criterion:** none of M1's yet (P0 is groundwork). Done in P0: monorepo,
-  `targets.config.json` with schema + tests, four prospect fixtures with deterministic build and
-  structure tests, CI and GitHub Pages workflows, `CLAUDE.md`, friction log.
-- **Next step:** P1 spikes — Lighthouse in Sandbox (5 runs, LCP spread ≤10%) and Telegram button →
-  Workflow hook resume on a preview deployment (incl. whether `/.well-known/workflow/v1/webhook/[token]`
-  can resume `createHook` tokens).
-- **Blockers:** none. Alex adds sensitive env vars to the `v-copilot` Vercel project himself.
-- **Model spend to date:** $0.00.
+## Status — 2026-10-09
+- **Milestone:** 1 (plan a POC), phase P1 (spikes) — both spikes pass; no stop-and-ask condition hit.
+- **Last completed:** P0 merged (PR #1, ff86261); fixture Pages URLs return 200. P1 spikes below.
+- **Next step:** codex-review loop and PR for `m1/p1-spikes`, then P2 (poc-core libraries).
+- **Blockers:** none. Open decision for Alex: the first Git deploy (feature branch, c48c65e) became the
+  production deployment on `v-copilot.vercel.app` (protected; no sensitive vars; `/api/spike` 404s there).
+- **Model spend to date:** $0.00. Sandbox use: one prepare session + one 5-run session (~2.5 min, 2 vCPU).
+
+## P1 spike results (2026-10-09)
+### Lighthouse in Sandbox — pass
+- Default image is Ubuntu 26.04, Node 24, passwordless sudo. `npm i -g lighthouse@13.5.0 playwright@1 &&
+  npx playwright install --with-deps chromium` took 36 s; snapshot `snap_lPPlYwCXqDdth3n0ga8azg5WQuN2`
+  (no expiry) holds it. A Sandbox from the snapshot is ready in ~2 s.
+- 5 mobile runs on `prospect-landing`, 2 vCPU: LCP median 18,400 ms, spread 0.32 % (limit 10 %), ~14 s per
+  run, 78 s total. Performance 0.59–0.62, accessibility 0.85, SEO 0.82, CLS 0.093 every run.
+- Lighthouse's default simulated throttling (Lantern) models LCP from one trace, which is why the spread is so
+  small. Keep 3 runs per spec.
+### Telegram button → Workflow hook on a preview — pass
+- Card with two buttons delivered; Alex's press resumed the paused run → `completed`, `approve`, user = Alex.
+- Second press after completion → hook disposed → `HookNotFoundError` → "already handled"; run unchanged.
+- No secret header / wrong secret → 401 (adapter). Valid secret, other user → 200, logged
+  `ignored press from non-allowed user`, run stayed `running`. Same forged press with Alex's ID after
+  completion reached the handler, so the user-ID check is what stopped the wrong-user press.
+- Public `/.well-known/workflow/v1/webhook/spike:<runId>` → 404 `HookNotFoundError`: the route uses
+  `resumeWebhook`, which refuses `createHook` tokens. Signed-link fallback not needed.
+### Carry into P3
+- Posting from a workflow step must `await bot.initialize()` first (memory state is otherwise unconnected).
+- A step that sends a message and then throws is retried and re-sends it (Alex got duplicate cards).
+  Make send steps idempotent or non-retrying after the send succeeds.
+- Telegram webhook URL = branch alias + `?x-vercel-protection-bypass=…`; the secret is in
+  `apps/web/.env.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`.
 
 ## Investigation record (kickoff steps 2–8)
 - Package versions confirmed from npm on 2026-10-07:

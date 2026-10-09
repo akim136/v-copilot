@@ -14,7 +14,7 @@ Links:
 ## 2026-10-07 · Milestone 1 · Workflow SDK
 What happened: `withWorkflow` silently adds a public `/.well-known/workflow/v1/webhook/[token]` route to the app. It is not obvious from the hooks docs whether a token created with `createHook` (not `createWebhook`) can be resumed through that public route, which matters when the token is derived from a run ID.
 What I expected: a clear statement in the hooks docs of which hook kinds are reachable over HTTP, and a recommendation for unguessable tokens on approval hooks.
-Severity: papercut (pending the P1 spike result)
+Severity: papercut — resolved in P1: the public route uses `resumeWebhook`, which refuses `createHook` tokens (verified live, 404)
 Suggested fix: document the reachability of `createHook` tokens via the webhook route next to the custom-token example.
 Links: workflow@5.1.0 `docs/` bundle
 
@@ -52,3 +52,10 @@ What I expected: a non-interactive stdin run to either use the all-branches defa
 Severity: slowdown
 Suggested fix: when stdin is not a TTY, apply defaults or fail loudly instead of waiting on a prompt.
 Links: vercel CLI 59.7.0
+
+## 2026-10-09 · Milestone 1 · Chat SDK
+What happened: posting a card from a Workflow step (not a webhook) failed with "MemoryStateAdapter is not connected. Call connect() first." after the message was already sent to Telegram, so the step's retries sent the card four times.
+What I expected: `thread.post()` to initialize the instance lazily, as webhook handling does, or to fail before sending anything.
+Severity: slowdown
+Suggested fix: call `ensureInitialized()` inside `post()`, or document that non-webhook senders must call `chat.initialize()` first.
+Links: chat@4.41.1, run wrun_41M4GCT4ZK0GG1908JWPTXY2YW
