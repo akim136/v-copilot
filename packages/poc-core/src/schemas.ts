@@ -140,7 +140,9 @@ export const PocReportSchema = z.strictObject({
 }).superRefine((r, ctx) => {
   const issue = (message: string) => ctx.addIssue({ code: 'custom', message });
   if ((r.status === 'rejected') !== (r.rejectReason !== undefined)) issue('rejectReason is set exactly when status is rejected');
-  if (r.rejectReason !== 'not_allowlisted') {
+  if (r.rejectReason === 'not_allowlisted') {
+    if (r.kind || r.permission) issue('a target that is not allowlisted has no kind or permission');
+  } else {
     if (!r.kind || !r.permission) issue('an allowlisted target has a kind and a permission');
     if (!z.url().safeParse(r.url).success) issue('an allowlisted target has a URL');
   }

@@ -31,6 +31,7 @@ describe('schemas', () => {
     ['an allowlisted report whose url is not a URL', { url: 'prospect-landing' }],
     ['a reject reason on a run that was not rejected', { rejectReason: 'daily_cap' }],
     ['a rejected run without a reason', { status: 'rejected', baseline: undefined }],
+    ['a not_allowlisted rejection that claims a kind and permission', { status: 'rejected', rejectReason: 'not_allowlisted', baseline: undefined }],
   ])('rejects %s', (_label, change) => {
     expect(() => PocReportSchema.parse({ ...planned, ...change })).toThrow();
   });
