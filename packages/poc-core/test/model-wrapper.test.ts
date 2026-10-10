@@ -136,6 +136,21 @@ describe('callModel', () => {
     expect(model.doGenerateCalls).toHaveLength(1);
   }, 15_000);
 
+  it('keeps the reason a call failed, on one line and clipped', async () => {
+    const reason = 'Your organization must be verified to use the model `gpt-5.6-terra`.\nPlease go to settings.';
+    const model = new MockLanguageModelV4({
+      modelId: MODELS.terra,
+      doGenerate: async () => {
+        throw new APICallError({ message: `${reason} ${'x'.repeat(500)}`, url: 'https://gateway.test/v1', requestBodyValues: { prompt: 'Rate this.' }, statusCode: 403, isRetryable: false });
+      },
+    });
+    const { message } = (await callModel(call({ model })).catch((e: unknown) => e)) as Error;
+    expect(message).toContain('(status 403): Your organization must be verified to use the model `gpt-5.6-terra`. Please go to settings.');
+    expect(message).not.toContain('\n');
+    expect(message).not.toContain('Rate this.');
+    expect(message.length).toBeLessThan(300);
+  });
+
   it('charges the worst case when the response carries no token usage', async () => {
     const none = { inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: undefined, text: undefined, reasoning: undefined } };
     const c = call({ model: mock(undefined, none) });
