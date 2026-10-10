@@ -9,7 +9,6 @@ import type { AnalyzeRequest, AnalyzeResult } from './types';
 
 export interface AnalyzeDeps {
   target: AllowedTarget;
-  readDailySpend: () => Promise<number>;
   mode: ModelMode;
   recordingsDir: string;
   // How many times this step has started; above 1, earlier attempts died without returning.
@@ -48,13 +47,12 @@ export async function runAnalyze(req: AnalyzeRequest, deps: AnalyzeDeps): Promis
     };
   });
   const runCostUsd = req.runCostUsd + unrecorded.reduce((sum, s) => sum + s.costUsd, 0);
-  const dailySpendUsd = await deps.readDailySpend();
 
   let result;
   try {
     result = await callModel({
       runId: req.runId, step: 'analyze', attempt: req.attempt, system: ANALYZE_SYSTEM, prompt, schema: AnalyzeOutputSchema,
-      mode: deps.mode, budget: { runCostUsd, dailySpendUsd }, recordingsDir: deps.recordingsDir, now: deps.now,
+      mode: deps.mode, budget: { runCostUsd, dailySpendUsd: req.dailySpendUsd }, recordingsDir: deps.recordingsDir, now: deps.now,
       ...(deps.model ? { model: deps.model } : {}),
     });
   } catch (err) {

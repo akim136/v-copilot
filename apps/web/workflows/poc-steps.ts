@@ -11,6 +11,14 @@ async function deps() {
   return { store: blobStore(), allowedTarget, loadTargets };
 }
 
+export async function resolveTargetStep(target: string): Promise<string | null> {
+  'use step';
+  const { checkAllowlist } = await import('@v-copilot/poc-core');
+  const { loadTargets } = await import('@/lib/targets');
+  const allowed = checkAllowlist(loadTargets(), target);
+  return allowed.ok ? allowed.target.name : null;
+}
+
 export async function intakeStep(input: PocInput): Promise<IntakeResult> {
   'use step';
   const { runIntake } = await import('@/lib/poc/intake');
@@ -59,17 +67,22 @@ export async function saveBaselineStep(req: SaveBaselineRequest): Promise<Baseli
   return saveBaseline(store, allowedTarget(req.targetName), req);
 }
 
+export async function readDailySpendStep(): Promise<number> {
+  'use step';
+  const { readDailySpend } = await import('@/lib/poc/run-index');
+  const { store } = await deps();
+  return readDailySpend(store, new Date());
+}
+
 export async function analyzeStep(req: AnalyzeRequest): Promise<AnalyzeResult> {
   'use step';
   const { getStepMetadata } = await import('workflow');
   const { modelModeFromEnv } = await import('@v-copilot/poc-core');
   const { runAnalyze } = await import('@/lib/poc/analyze');
-  const { readDailySpend } = await import('@/lib/poc/run-index');
   const { recordingsDir } = await import('@/lib/paths');
-  const { store, allowedTarget } = await deps();
+  const { allowedTarget } = await deps();
   return runAnalyze(req, {
     target: allowedTarget(req.targetName),
-    readDailySpend: () => readDailySpend(store, new Date()),
     mode: modelModeFromEnv(),
     recordingsDir: recordingsDir(),
     stepAttempt: getStepMetadata().attempt,

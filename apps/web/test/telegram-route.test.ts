@@ -75,6 +75,13 @@ describe('telegram route', () => {
     expect((await call()).status).toBe(500);
   });
 
+  it('maps the spike Reject button to a reject on the spike hook', async () => {
+    h.resumeHook.mockResolvedValue({});
+    Object.assign(press, { actionId: 'sr' });
+    expect((await call()).status).toBe(200);
+    expect(h.resumeHook).toHaveBeenCalledWith(`spike:${RUN}`, { decision: 'reject', userId: '1234567890' });
+  });
+
   it('maps the criteria buttons to the criteria hook with the decision and its source', async () => {
     h.resumeHook.mockResolvedValue({});
     Object.assign(press, { actionId: 'ca' });

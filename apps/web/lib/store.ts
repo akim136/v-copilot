@@ -20,6 +20,8 @@ export function blobStore(): Store {
     async read(path) {
       const res = await get(path, { access: 'private', useCache: false });
       if (!res || res.statusCode !== 200) return null;
+      // An empty etag would turn the next ifMatch write into an unguarded overwrite.
+      if (!res.blob.etag) throw new Error(`Blob returned no etag for ${path}`);
       return { body: await new Response(res.stream).text(), etag: res.blob.etag };
     },
     async write(path, body, { contentType, mode }) {

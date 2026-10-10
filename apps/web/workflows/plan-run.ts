@@ -17,6 +17,8 @@ export interface PlanDeps {
   // The workflow's clock: ISO time and milliseconds.
   now: () => string;
   clock: () => number;
+  // The allowlisted name for a requested target, or null; read from the config, no I/O.
+  resolveTarget: (target: string) => Promise<string | null>;
   intake: (input: PocInput) => Promise<IntakeResult>;
   readCachedBaseline: (targetName: string) => Promise<Baseline | null>;
   startSandbox: () => Promise<SandboxHandle>;
@@ -24,6 +26,8 @@ export interface PlanDeps {
   stopSandbox: (handle: SandboxHandle) => Promise<void>;
   psiField: (targetName: string) => Promise<Record<string, number> | undefined>;
   saveBaseline: (req: SaveBaselineRequest) => Promise<Baseline>;
+  // Read in its own step, so a failed read never looks like an analyze attempt that may have paid for a call.
+  readDailySpend: () => Promise<number>;
   analyze: (req: AnalyzeRequest) => Promise<AnalyzeResult>;
   awaitCriteria: (card: CriteriaCard) => Promise<GateDecision>;
   writeReport: (req: ReportRequest) => Promise<void>;
@@ -83,6 +87,8 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
   });
 
   try {
+    // Known before intake, so a run that fails there is still reported and indexed under its target.
+    targetName = (await d.resolveTarget(input.target)) ?? undefined;
     const intake = await timed('intake', () => d.intake(input));
     if (!intake.ok) {
       status = 'rejected';
@@ -90,7 +96,7 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
       if (intake.reason === 'daily_cap') {
         targetName = intake.targetName;
         capHit = 'daily_cap';
-        error = `refused: ${usd(intake.spentUsd)} of model spend in the last 24 hours`;
+        error = `intake refused: ${usd(intake.spentUsd)} of model spend in the last 24 hours`;
       }
     } else {
       targetName = intake.targetName;
@@ -102,9 +108,10 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
       const base = baseline;
       const outcome = await timed('analyze', async () => {
         for (let attempt = 1; ; attempt++) {
+          const dailySpendUsd = await d.readDailySpend();
           const res = await d.analyze({
             runId: d.runId, targetName: name, brief: input.brief, html: intake.html, imageSizes: intake.imageSizes,
-            outlineOrder: intake.outline.order, baseline: base, runCostUsd: sum(spans), attempt,
+            outlineOrder: intake.outline.order, baseline: base, runCostUsd: sum(spans), dailySpendUsd, attempt,
           });
           spans.push(...res.spans);
           if (res.ok || res.reason === 'cap' || !res.retryable || attempt === ANALYZE_ATTEMPTS) return res;
@@ -131,7 +138,7 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
         if (outcome.reason === 'cap') {
           capHit = outcome.cap;
           const what = outcome.cap === 'run_cap' ? 'per-run cap' : '24-hour cap';
-          error = `stopped at the ${what}: ${usd(outcome.spentUsd)} against ${usd(outcome.limitUsd)}`;
+          error = `analyze stopped at the ${what}: ${usd(outcome.spentUsd)} against ${usd(outcome.limitUsd)}`;
         } else {
           error = `analyze failed: ${outcome.message}`;
         }
@@ -142,6 +149,8 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
   } catch (err) {
     error = `${phase} failed: ${messageOf(err)}`;
     status = 'failed';
+    // Only a rejected run carries a reject reason.
+    rejectReason = undefined;
     thrown = { err };
     await d.writeReport(report()).catch(() => {});
   }

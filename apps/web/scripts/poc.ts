@@ -2,9 +2,11 @@
 // pnpm poc status <runId>
 // pnpm poc approve <runId> | reject <runId>
 // Calls /api/poc on POC_BASE_URL (default the local dev server) with ADMIN_API_TOKEN from apps/web/.env.local.
+// Redirects are refused, so the secrets only ever go to the checked host.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { pocBaseUrl } from './base-url';
 
 const envFile = join(import.meta.dirname, '..', '.env.local');
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -18,9 +20,15 @@ function fail(message: string): never {
 
 const token = process.env.ADMIN_API_TOKEN;
 if (!token) fail('ADMIN_API_TOKEN is not set (apps/web/.env.local)');
-const base = new URL(process.env.POC_BASE_URL || 'http://localhost:3000');
+let target: ReturnType<typeof pocBaseUrl>;
+try {
+  target = pocBaseUrl(process.env.POC_BASE_URL);
+} catch (err) {
+  fail((err as Error).message);
+}
+const base = target.url;
 const headers: Record<string, string> = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
-if (base.hostname !== 'localhost' && base.hostname !== '127.0.0.1') {
+if (!target.local) {
   const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   if (!bypass) fail('VERCEL_AUTOMATION_BYPASS_SECRET is needed to reach a protected preview');
   headers['x-vercel-protection-bypass'] = bypass;
@@ -36,13 +44,13 @@ if (!command || !arg) fail(USAGE);
 let res: Response;
 if (command === 'start') {
   if (values.mode !== 'plan') fail('only --mode plan exists in Milestone 1');
-  res = await fetch(new URL('/api/poc', base), { method: 'POST', headers, body: JSON.stringify({ action: 'start', target: arg, brief: values.brief, mode: 'plan' }) });
+  res = await fetch(new URL('/api/poc', base), { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ action: 'start', target: arg, brief: values.brief, mode: 'plan' }) });
 } else if (command === 'approve' || command === 'reject') {
-  res = await fetch(new URL('/api/poc', base), { method: 'POST', headers, body: JSON.stringify({ action: command, runId: arg }) });
+  res = await fetch(new URL('/api/poc', base), { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ action: command, runId: arg }) });
 } else if (command === 'status') {
   const url = new URL('/api/poc', base);
   url.searchParams.set('runId', arg);
-  res = await fetch(url, { headers });
+  res = await fetch(url, { headers, redirect: 'error' });
 } else {
   fail(USAGE);
 }

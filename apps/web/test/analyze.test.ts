@@ -25,7 +25,7 @@ const intakeOutline = extractOutline(html, { baseUrl: BASE });
 const RUN = 'wrun_01K7AAAAAAAAAAAAAAAAAAAAAA';
 const req = (o: Partial<AnalyzeRequest> = {}): AnalyzeRequest => ({
   runId: RUN, targetName: 'prospect-landing', brief: 'Make the landing page fast', html, imageSizes: [],
-  outlineOrder: intakeOutline.order, baseline, runCostUsd: 0, attempt: 1, ...o,
+  outlineOrder: intakeOutline.order, baseline, runCostUsd: 0, dailySpendUsd: 0, attempt: 1, ...o,
 });
 
 const output = {
@@ -44,7 +44,7 @@ function mockModel(fail?: Error) {
   return new MockLanguageModelV4({ modelId: MODELS.terra, doGenerate: async () => { if (fail) throw fail; return result; } });
 }
 const deps = (o: Partial<AnalyzeDeps> = {}): AnalyzeDeps => ({
-  target, readDailySpend: async () => 0, mode: 'record' as ModelMode, recordingsDir: mkdtempSync(join(tmpdir(), 'rec-')),
+  target, mode: 'record' as ModelMode, recordingsDir: mkdtempSync(join(tmpdir(), 'rec-')),
   stepAttempt: 1, now: () => new Date('2026-10-10T00:02:00.000Z'), ...o,
 });
 
@@ -115,7 +115,7 @@ describe('analyze', () => {
   it('returns the cap instead of calling the model at the per-run or 24-hour cap', async () => {
     const model = mockModel();
     expect(await runAnalyze(req({ runCostUsd: 1.51 }), deps({ model }))).toMatchObject({ ok: false, reason: 'cap', cap: 'run_cap', spans: [] });
-    expect(await runAnalyze(req(), deps({ model, readDailySpend: async () => 8 }))).toMatchObject({ ok: false, reason: 'cap', cap: 'daily_cap' });
+    expect(await runAnalyze(req({ dailySpendUsd: 8 }), deps({ model }))).toMatchObject({ ok: false, reason: 'cap', cap: 'daily_cap' });
     expect(model.doGenerateCalls).toHaveLength(0);
   });
 
@@ -130,9 +130,4 @@ describe('analyze', () => {
     expect(miss).toMatchObject({ ok: false, reason: 'model', retryable: false, spans: [] });
   });
 
-  it('reads the 24-hour spend before every call', async () => {
-    const readDailySpend = vi.fn(async () => 0);
-    await runAnalyze(req(), deps({ model: mockModel(), readDailySpend }));
-    expect(readDailySpend).toHaveBeenCalledTimes(1);
-  });
 });

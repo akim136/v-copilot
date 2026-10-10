@@ -33,6 +33,7 @@ function fakeDeps(over: Partial<PlanDeps> = {}) {
     runId: RUN,
     now: () => new Date(Date.UTC(2026, 9, 10, 0, 0, t++)).toISOString(),
     clock: () => (t += 1000),
+    resolveTarget: vi.fn(async (target: string) => (target === 'prospect-landing' ? 'prospect-landing' : null)),
     intake: vi.fn(async () => okIntake),
     readCachedBaseline: vi.fn(async () => null),
     startSandbox: vi.fn(async () => ({ name: 'poc-x', chromePath: '/chrome' })),
@@ -40,6 +41,7 @@ function fakeDeps(over: Partial<PlanDeps> = {}) {
     stopSandbox: vi.fn(async () => {}),
     psiField: vi.fn(async () => undefined),
     saveBaseline: vi.fn(async () => baseline),
+    readDailySpend: vi.fn(async () => 1.25),
     analyze: vi.fn(async (): Promise<AnalyzeResult> => ({ ok: true, spans: [span(0.02)], analysis })),
     awaitCriteria: vi.fn(async () => approve),
     writeReport: vi.fn(async (r: ReportRequest) => void calls.reports.push(structuredClone(r))),
@@ -74,7 +76,7 @@ describe('planRun', () => {
     expect(d.analyze).not.toHaveBeenCalled();
     expect(d.startSandbox).not.toHaveBeenCalled();
     expect(calls.alerts).toHaveLength(1);
-    expect(calls.alerts[0]).toMatch(/\$8\.20/);
+    expect(calls.alerts[0]).toMatch(/intake refused: \$8\.20/);
     expect(calls.rows[0]).toMatchObject({ status: 'rejected', capHit: 'daily_cap', target: 'prospect-landing' });
   });
 
@@ -117,7 +119,7 @@ describe('planRun', () => {
     expect(await planRun(input, d)).toMatchObject({ status: 'failed', costUsd: 1.52 });
     expect(d.awaitCriteria).not.toHaveBeenCalled();
     expect(calls.alerts).toHaveLength(1);
-    expect(calls.alerts[0]).toMatch(/per-run cap/);
+    expect(calls.alerts[0]).toMatch(/analyze stopped at the per-run cap/);
     expect(calls.rows[0]).toMatchObject({ status: 'failed', capHit: 'run_cap', costUsd: 1.52 });
     expect(calls.reports.at(-1)).toMatchObject({ status: 'failed', error: expect.stringMatching(/per-run cap/) });
   });
@@ -128,7 +130,8 @@ describe('planRun', () => {
       .mockResolvedValueOnce({ ok: true, spans: [span(0.02, 2)], analysis });
     const { d, calls } = fakeDeps({ analyze });
     expect(await planRun(input, d)).toMatchObject({ status: 'planned' });
-    expect(analyze.mock.calls.map((c) => [c[0].attempt, c[0].runCostUsd])).toEqual([[1, 0], [2, 0.3]]);
+    expect(analyze.mock.calls.map((c) => [c[0].attempt, c[0].runCostUsd, c[0].dailySpendUsd])).toEqual([[1, 0, 1.25], [2, 0.3, 1.25]]);
+    expect(d.readDailySpend).toHaveBeenCalledTimes(2);
     expect(calls.rows[0]!.costUsd).toBeCloseTo(0.32, 10);
   });
 
@@ -160,7 +163,7 @@ describe('planRun', () => {
       alert: vi.fn(async () => { throw new Error('telegram down'); }),
     });
     await expect(planRun(input, d)).rejects.toThrow('index unreadable');
-    expect(calls.rows).toEqual([expect.objectContaining({ status: 'failed', target: '_unlisted' })]);
+    expect(calls.rows).toEqual([expect.objectContaining({ status: 'failed', target: 'prospect-landing' })]);
   });
 
   it('alerts and fails when the index cannot be written', async () => {
@@ -174,6 +177,23 @@ describe('planRun', () => {
     const { d, calls } = fakeDeps({ writeReport });
     await expect(planRun(input, d)).rejects.toThrow('blob down');
     expect(writeReport.mock.calls.at(-1)![0]).toMatchObject({ status: 'failed', error: expect.stringMatching(/^report failed: Error: blob down/) });
+    expect(calls.rows[0]!.status).toBe('failed');
+  });
+
+  it('names an allowlisted target in the alert and the index when intake throws', async () => {
+    const { d, calls } = fakeDeps({ intake: vi.fn(async () => { throw new Error('target answered 503'); }) });
+    await expect(planRun(input, d)).rejects.toThrow('target answered 503');
+    expect(calls.alerts).toEqual([expect.stringMatching(/\(prospect-landing\): failed\. intake failed: Error: target answered 503/)]);
+    expect(calls.reports.at(-1)).toMatchObject({ targetName: 'prospect-landing', status: 'failed' });
+  });
+
+  it('drops the reject reason when a rejected run then fails to write its report', async () => {
+    const writeReport = vi.fn().mockRejectedValueOnce(new Error('blob down')).mockResolvedValueOnce(undefined);
+    const { d, calls } = fakeDeps({ writeReport, awaitCriteria: vi.fn(async (): Promise<GateDecision> => ({ ...approve, decision: 'reject' })) });
+    await expect(planRun(input, d)).rejects.toThrow('blob down');
+    const fallback = writeReport.mock.calls.at(-1)![0] as ReportRequest;
+    expect(fallback.status).toBe('failed');
+    expect(fallback.rejectReason).toBeUndefined();
     expect(calls.rows[0]!.status).toBe('failed');
   });
 });

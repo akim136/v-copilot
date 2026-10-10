@@ -46,6 +46,8 @@ export interface AnalyzeRequest {
   baseline: Baseline;
   // Model spend already recorded for this run.
   runCostUsd: number;
+  // Spend in the last 24 hours, read just before this call.
+  dailySpendUsd: number;
   // Which analyze call this is within the run (1-based).
   attempt: number;
 }

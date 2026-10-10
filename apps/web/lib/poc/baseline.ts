@@ -40,7 +40,11 @@ export async function startSandbox(runId: string): Promise<SandboxHandle> {
     cmd: 'bash', args: ['-lc', 'find / -name chrome -type f -path "*chrome-linux*" 2>/dev/null | head -1'], sudo: true,
   });
   const chromePath = (await find.stdout()).trim();
-  if (find.exitCode !== 0 || !chromePath) throw new Error('Chromium not found in the Sandbox snapshot');
+  if (find.exitCode !== 0 || !chromePath) {
+    // A retry would find the same snapshot, so stop the Sandbox now rather than leave it to time out.
+    await sbx.stop().catch(() => {});
+    throw new FatalError('Chromium not found in the Sandbox snapshot');
+  }
   return { name: sbx.name, chromePath };
 }
 
@@ -53,7 +57,11 @@ export async function runLighthouse(handle: SandboxHandle, target: AllowedTarget
   if (res.exitCode !== 0) throw new Error(`lighthouse exited with ${res.exitCode}`);
   const file = await sbx.readFileToBuffer({ path: output });
   if (!file) throw new Error('lighthouse wrote no result');
-  return parseLighthouseResult(JSON.parse(file.toString('utf8')));
+  const lhr: unknown = JSON.parse(file.toString('utf8'));
+  // Chrome follows redirects that intake refuses; a measurement of any other page must not become the baseline.
+  const measured = (lhr as { finalDisplayedUrl?: unknown } | null)?.finalDisplayedUrl;
+  if (measured !== target.url) throw new FatalError(`Lighthouse measured ${String(measured)} instead of ${target.url}`);
+  return parseLighthouseResult(lhr);
 }
 
 export async function stopSandbox(handle: SandboxHandle): Promise<void> {

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { baselineCacheKey, checkAllowlist, parseTargetsConfig, type AllowedTarget } from '@v-copilot/poc-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FatalError } from 'workflow';
 import { memoryStore } from './fakes';
 
 const lhr = readFileSync(join(import.meta.dirname, '../../../packages/poc-core/test/fixtures/lhr-prospect-landing.json'));
@@ -12,6 +13,8 @@ const sbx = vi.hoisted(() => ({
   created: [] as unknown[],
   stopped: 0,
   lighthouseExit: 0,
+  chrome: '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n',
+  result: undefined as Buffer | undefined,
 }));
 vi.mock('@vercel/sandbox', () => {
   const instance = (name: string) => ({
@@ -19,9 +22,9 @@ vi.mock('@vercel/sandbox', () => {
     runCommand: async (c: { cmd: string; args: string[]; env?: Record<string, string>; sudo?: boolean }) => {
       sbx.commands.push(c);
       const exitCode = c.cmd === 'lighthouse' ? sbx.lighthouseExit : 0;
-      return { exitCode, stdout: async () => (c.cmd === 'bash' ? '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n' : ''), stderr: async () => '' };
+      return { exitCode, stdout: async () => (c.cmd === 'bash' ? sbx.chrome : ''), stderr: async () => '' };
     },
-    readFileToBuffer: async () => lhr,
+    readFileToBuffer: async () => sbx.result ?? lhr,
     stop: async () => void sbx.stopped++,
   });
   return {
@@ -46,6 +49,8 @@ describe('baseline', () => {
     sbx.created = [];
     sbx.stopped = 0;
     sbx.lighthouseExit = 0;
+    sbx.chrome = '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n';
+    sbx.result = undefined;
   });
 
   it('starts one named Sandbox from the snapshot and finds Chromium', async () => {
@@ -103,6 +108,20 @@ describe('baseline', () => {
     const run = await runLighthouse({ name: 'poc-x', chromePath: '/chrome' }, target, 0);
     const store = { read: async () => null, write: async () => { throw new Error('blob down'); } };
     await expect(saveBaseline(store, target, { targetName: target.name, runs: [run, run, run], measuredAt })).resolves.toMatchObject({ runs: [run.metrics, run.metrics, run.metrics] });
+  });
+
+  it('stops the Sandbox and gives up when the snapshot has no Chromium', async () => {
+    sbx.chrome = '';
+    const err = await startSandbox(RUN).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FatalError);
+    expect(sbx.stopped).toBe(1);
+  });
+
+  it('refuses a measurement of any page but the target', async () => {
+    sbx.result = Buffer.from(JSON.stringify({ ...JSON.parse(lhr.toString('utf8')), finalDisplayedUrl: 'https://evil.example/' }));
+    const err = await runLighthouse({ name: 'poc-x', chromePath: '/chrome' }, target, 0).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FatalError);
+    expect(String(err)).toMatch(/evil\.example/);
   });
 
   it('stops the Sandbox by name', async () => {

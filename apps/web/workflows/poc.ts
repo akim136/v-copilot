@@ -5,7 +5,8 @@ import type { CriteriaCard, PlanOutcome, PocInput } from '@/lib/poc/types';
 import { planRun } from './plan-run';
 import {
   alertStep, analyzeStep, armCriteriaCardStep, closeCriteriaCardStep, intakeStep, lighthouseStep, postCriteriaCardStep,
-  psiFieldStep, readCachedBaselineStep, recordRunStep, saveBaselineStep, startSandboxStep, stopSandboxStep, writeReportStep,
+  psiFieldStep, readCachedBaselineStep, readDailySpendStep, recordRunStep, resolveTargetStep, saveBaselineStep,
+  startSandboxStep, stopSandboxStep, writeReportStep,
 } from './poc-steps';
 
 // The criteria gate. The hook is registered before the buttons exist, awaited exactly once, then released,
@@ -34,6 +35,7 @@ export async function pocWorkflow(input: PocInput): Promise<PlanOutcome> {
     runId,
     now: () => new Date().toISOString(),
     clock: () => Date.now(),
+    resolveTarget: resolveTargetStep,
     intake: intakeStep,
     readCachedBaseline: readCachedBaselineStep,
     startSandbox: () => startSandboxStep(runId),
@@ -41,6 +43,7 @@ export async function pocWorkflow(input: PocInput): Promise<PlanOutcome> {
     stopSandbox: stopSandboxStep,
     psiField: psiFieldStep,
     saveBaseline: saveBaselineStep,
+    readDailySpend: readDailySpendStep,
     analyze: analyzeStep,
     awaitCriteria,
     writeReport: writeReportStep,
