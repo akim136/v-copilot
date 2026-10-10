@@ -1,4 +1,5 @@
 import { CriterionSchema, type Criterion, type Metric, type MetricValues } from './schemas';
+import { oneLine } from './text';
 
 export const METRIC_DIRECTION: Readonly<Record<Metric, 'higher' | 'lower'>> = Object.freeze({
   performance: 'higher', accessibility: 'higher', seo: 'higher',
@@ -6,16 +7,6 @@ export const METRIC_DIRECTION: Readonly<Record<Metric, 'higher' | 'lower'>> = Ob
 });
 export const MAX_CRITERIA = 5;
 const SCORES = new Set<Metric>(['performance', 'accessibility', 'seo']);
-
-// At most max UTF-16 units (the schema's length), never splitting a character.
-function clip(s: string, max: number): string {
-  let out = '';
-  for (const ch of s) {
-    if (out.length + ch.length > max) break;
-    out += ch;
-  }
-  return out;
-}
 
 export interface DraftCriterion { metric: Metric; baseline: number; target: number; rationale: string }
 
@@ -26,7 +17,7 @@ export function reconcileCriteria(draft: readonly DraftCriterion[], median: Metr
   const dropped: { metric: string; reason: string }[] = [];
   for (const d of draft) {
     const baseline = median[d.metric];
-    const rationale = clip(d.rationale.replace(/\s+/g, ' ').trim(), 200);
+    const rationale = oneLine(d.rationale, 200);
     const better = METRIC_DIRECTION[d.metric] === 'higher' ? d.target > baseline : d.target < baseline;
     let reason: string | undefined;
     if (criteria.some((c) => c.metric === d.metric)) reason = 'duplicate metric';

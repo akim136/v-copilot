@@ -66,3 +66,25 @@ What I expected: retries to be opt-in, or the result to carry the usage of every
 Severity: slowdown (found in review; we set `maxRetries: 0` and retry through our own cap-checked wrapper)
 Suggested fix: document the retry default next to usage accounting, and report per-attempt usage on `RetryError`.
 Links: ai@7.0.130
+
+## 2026-10-10 · Milestone 1 · Workflow SDK
+What happened: the generated `.well-known/workflow/v1/flow/route.js` was 1.43 MB and contained `@vercel/sandbox`, Chat SDK, zod locales and a Markdown parser, which looked like Node-only step dependencies leaking into the workflow VM. Confirming they were not took reading `route.js.__wf_tmp.js.debug.json`: the builder adds the modules of every class with custom serialization (Sandbox, Chat SDK) as "serdeOnlyFiles". Separately, `getStepMetadata().attempt` is documented as "increases with each retry", but the runtime's own comment says duplicate `step_started` events can inflate the raw count on the local World.
+What I expected: a build summary saying which files went into the workflow bundle and why, and an attempt number documented as possibly overcounting.
+Severity: slowdown
+Suggested fix: print the workflow bundle's file list (or the debug JSON path) in the build output, and document `attempt`'s guarantees.
+Links: workflow@5.1.0, @workflow/core dist/runtime/count-step-started-events.js
+
+## 2026-10-10 · Milestone 1 · Vercel Blob
+What happened: `put(path, body, { allowOverwrite: false })` onto an existing path throws a generic `BlobError`, not a typed error like `BlobPreconditionFailedError`, so a create-only write cannot tell "already exists" from a network failure without a second read. `get()` also types `blob.etag` as a string that can be empty, and `put({ ifMatch: '' })` then sends no condition at all, which silently turns a guarded write into an overwrite.
+What I expected: a typed "already exists" error, and `ifMatch` with an empty value to be rejected.
+Severity: papercut (found while writing the index store; we re-read on a failed create and refuse an empty etag)
+Suggested fix: export `BlobAlreadyExistsError`; throw on an empty `ifMatch`.
+Links: @vercel/blob@2.8.1
+
+## 2026-10-10 · Milestone 1 · Vercel Sandbox
+What happened: a Sandbox created from a snapshot gives no way to locate binaries the snapshot installed, so every start runs `find /` for Playwright's versioned Chromium path. Lighthouse also needed `sudo` to launch Chrome. If the lookup fails after `getOrCreate`, the Sandbox keeps running until its timeout unless the caller stops it.
+What I expected: snapshot metadata (environment or PATH captured at `snapshot()`), so a restored Sandbox starts with the same environment as the session that made it.
+Severity: papercut
+Suggested fix: persist the session's environment variables with the snapshot, or let `snapshot()` record an env map.
+Links: @vercel/sandbox@3.5.1, snapshot snap_lPPlYwCXqDdth3n0ga8azg5WQuN2
+

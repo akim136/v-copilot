@@ -31,7 +31,7 @@ vi.mock('@/lib/telegram', () => ({
 const RUN = 'wrun_41M4GCW7PK0GZN9PC2CX634QPA';
 const press = {
   actionId: 'sa',
-  value: RUN,
+  value: RUN as string,
   user: { userId: '1234567890' },
   thread: {
     post: async (text: string) => {
@@ -49,6 +49,7 @@ describe('telegram route', () => {
     h.resumeHook.mockReset();
     h.replyFails = false;
     h.replies = [];
+    Object.assign(press, { actionId: 'sa', value: RUN, user: { userId: '1234567890' } });
   });
 
   it('resumes the hook for Alex and acknowledges', async () => {
@@ -72,5 +73,38 @@ describe('telegram route', () => {
   it('returns 500 so Telegram redelivers when resuming fails for another reason', async () => {
     h.resumeHook.mockRejectedValue(new Error('world unavailable'));
     expect((await call()).status).toBe(500);
+  });
+
+  it('maps the spike Reject button to a reject on the spike hook', async () => {
+    h.resumeHook.mockResolvedValue({});
+    Object.assign(press, { actionId: 'sr' });
+    expect((await call()).status).toBe(200);
+    expect(h.resumeHook).toHaveBeenCalledWith(`spike:${RUN}`, { decision: 'reject', userId: '1234567890' });
+  });
+
+  it('maps the criteria buttons to the criteria hook with the decision and its source', async () => {
+    h.resumeHook.mockResolvedValue({});
+    Object.assign(press, { actionId: 'ca' });
+    expect((await call()).status).toBe(200);
+    Object.assign(press, { actionId: 'cr' });
+    expect((await call()).status).toBe(200);
+    expect(h.resumeHook.mock.calls).toEqual([
+      [`criteria:${RUN}`, { decision: 'approve', userId: '1234567890', via: 'telegram' }],
+      [`criteria:${RUN}`, { decision: 'reject', userId: '1234567890', via: 'telegram' }],
+    ]);
+  });
+
+  it('ignores a press from anyone but Alex', async () => {
+    Object.assign(press, { actionId: 'ca', user: { userId: '999' } });
+    expect((await call()).status).toBe(200);
+    expect(h.resumeHook).not.toHaveBeenCalled();
+  });
+
+  it('ignores a press that carries no valid run ID', async () => {
+    for (const value of ['', 'wrun_short', `${RUN}x`, '../criteria:wrun_41M4GCW7PK0GZN9PC2CX634QPA']) {
+      Object.assign(press, { actionId: 'ca', value });
+      expect((await call()).status).toBe(200);
+    }
+    expect(h.resumeHook).not.toHaveBeenCalled();
   });
 });

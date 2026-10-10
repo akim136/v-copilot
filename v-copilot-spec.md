@@ -39,7 +39,7 @@ The work runs on Alex's personal Vercel Hobby team at 5 to 10 hours a week, in m
 
 ### Approvals and alerts
 
-- Approvals and alerts go through a dedicated v-copilot Telegram bot using the Chat SDK's Telegram adapter, with Approve and Reject as inline buttons whose callback data (64 bytes at most) carries only the gate and a short run ID, because Alex wants Telegram and a separate bot keeps these messages and credentials apart from the Hermes trading bot.
+- Approvals and alerts go through a dedicated v-copilot Telegram bot using the Chat SDK's Telegram adapter, with Approve and Reject as inline buttons whose callback data (64 bytes at most) carries only the gate and the run ID, because Alex wants Telegram and a separate bot keeps these messages and credentials apart from the Hermes trading bot.
 - The Telegram webhook accepts an update only when Telegram's secret-token header matches and the sender's Telegram user ID equals Alex's, and a gate resumes at most once, because a button press is an authorization and must not be forgeable or replayable.
 - The `approve_poc_gate` MCP tool resumes the same hook as the Telegram button, because one approval primitive keeps every surface identical.
 
@@ -120,14 +120,17 @@ v-copilot/                         public repo under akim136
   .github/workflows/eval-replay.yml  replay eval and prompt-change baseline check
   apps/web/                          Next.js app on the personal Hobby team
     app/api/telegram/route.ts        Chat SDK Telegram webhook (approvals)
+    app/api/poc/route.ts             admin start, approve, reject and status (never in production)
     app/api/cron/health/route.ts     daily health job (checks CRON_SECRET)
     app/api/auth/[...all]/route.ts   Better Auth with Sign in with Vercel
     app/api/[transport]/route.ts     MCP endpoint (Milestone 4)
     app/.well-known/...              OAuth metadata (Milestone 4)
     app/runs/                        runs page
     instrumentation.ts               @vercel/otel registration
-    workflows/poc.ts                 "use workflow" POC definition
-    workflows/steps/*.ts             "use step" functions, one file per step
+    workflows/poc.ts                 "use workflow" POC definition and the criteria gate
+    workflows/plan-run.ts            the run's control flow over injected steps (types only, testable)
+    workflows/poc-steps.ts           "use step" wrappers, dependencies imported inside each step
+    lib/poc/                         what each step does: intake, baseline, analyze, card, report, run index
     scripts/poc.ts                   pnpm poc start <target>
     scripts/eval.ts                  replay and live eval runner
   packages/vercel-ops/               Vercel calls on @vercel/sdk, guardrails, audit writer
@@ -137,7 +140,7 @@ v-copilot/                         public repo under akim136
     src/lighthouse.ts                Lighthouse runner and medians
     src/screenshots.ts, similarity.ts
     src/fidelity.ts, verdicts.ts, honesty.ts
-    src/telemetry.ts                 span writer and alert sender
+    src/telemetry.ts                 span writer (the alert sender is apps/web/lib/poc/card.ts)
     src/caps.ts                      per-run and 24-hour spend ceilings
     src/models.ts, pricing.ts        pinned model IDs and price table
     src/prompts/                     prompt files
@@ -269,7 +272,7 @@ interface PocReport {
   kind?: 'fixture' | 'control'; permission?: 'owned' | 'written';   // absent only on a not_allowlisted rejection
   mode: 'plan' | 'full' | 'eval'; status: RunStatus;
   success?: boolean;                               // all criteria met and fidelity >= 0.9
-  rejectReason?: 'not_allowlisted' | 'daily_cap';
+  rejectReason?: 'not_allowlisted' | 'daily_cap' | 'criteria_rejected';   // criteria_rejected: Reject at the criteria gate
   brief: string;
   criteria: { id: string; metric: Metric; baseline: number; target: number;
               rationale: string; result?: number; met?: boolean }[];
@@ -292,8 +295,18 @@ interface PocReport {
 
 interface Span {
   runId: string; step: string; model: string; attempt: number;
-  inputTokens: number; cachedInputTokens: number; outputTokens: number;
+  inputTokens: number; cachedInputTokens: number; cacheWriteTokens: number; outputTokens: number;
   costUsd: number; latencyMs: number; mode: 'live' | 'record' | 'replay'; startedAt: string;
+}
+// A model step charges each earlier attempt of itself that did not return its worst case (every input token
+// at the cache-write rate plus full output) as an extra span: it cannot tell whether that attempt paid for a
+// call, so spend is never understated. The 24-hour spend is read in a separate step for the same reason.
+
+interface RunIndexRow {                           // one per run in runs/index.json; written with an etag (ifMatch)
+  runId: string; target: string;                   // target is '_unlisted' on a not_allowlisted rejection
+  mode: 'plan' | 'full' | 'eval'; status: RunStatus; costUsd: number;
+  startedAt: string; endedAt?: string; success?: boolean;
+  capHit?: 'run_cap' | 'daily_cap';               // the health job reads cap hits from the index alone
 }
 
 interface Health {
@@ -320,7 +333,7 @@ interface EvalResult {
 
 ```
 Blob layout
-pocs/<target>/<runId>/bundle.json           report, spec, measurements, trace
+pocs/<target>/<runId>/bundle.json           report, spec, measurements, trace (<target> is _unlisted on a not_allowlisted rejection)
 pocs/<target>/<runId>/report.md
 pocs/<target>/<runId>/screenshot-original.png
 pocs/<target>/<runId>/screenshot-preview.png

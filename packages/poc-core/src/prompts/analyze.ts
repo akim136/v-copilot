@@ -7,7 +7,7 @@ export const SECTION_KINDS = [
 ] as const;
 
 // Model-facing schema: every field required and no extra keys, so it works with strict structured outputs.
-// Criteria are checked in code afterwards (reconcileCriteria); sections and opportunities are not yet.
+// Everything is checked in code afterwards (reconcileAnalysis) before a human sees it.
 export const AnalyzeOutputSchema = z.strictObject({
   sections: z.array(z.strictObject({ kind: z.enum(SECTION_KINDS), name: z.string(), ids: z.array(z.string()) })),
   opportunities: z.array(z.strictObject({ title: z.string(), detail: z.string(), metrics: z.array(MetricSchema) })),
