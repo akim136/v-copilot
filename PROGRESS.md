@@ -1,12 +1,28 @@
 # Progress
 
 ## Status — 2026-10-09
-- **Milestone:** 1 (plan a POC), phase P1 (spikes) — both spikes pass; no stop-and-ask condition hit.
-- **Last completed:** P0 merged (PR #1, ff86261); fixture Pages URLs return 200. P1 spikes below.
-- **Next step:** codex-review loop and PR for `m1/p1-spikes`, then P2 (poc-core libraries).
+- **Milestone:** 1 (plan a POC), phase P2 (poc-core libraries) on branch `m1/p2-poc-core`, in review.
+- **Last completed:** P2 code and review round 1: allowlist, caps, outline, Lighthouse parsing and medians,
+  baseline cache key, PSI client, models, pricing, model wrapper, analyze prompt, criteria reconciliation,
+  zod schemas. 153 unit tests, mocks only; full turbo check green. Not yet pushed.
+- **Next step:** codex-review round 2 on P2, then push and open the P2 PR (Alex confirms the push). Then P3.
 - **Blockers:** none. Open decision for Alex: the first Git deploy (feature branch, c48c65e) became the
   production deployment on `v-copilot.vercel.app` (protected; no sensitive vars; `/api/spike` 404s there).
 - **Model spend to date:** $0.00. Sandbox use: one prepare session + one 5-run session (~2.5 min, 2 vCPU).
+
+## P2 decisions (for the PR)
+- Outline gains `order` (all IDs in document order, needed by fidelity's order component); spec updated.
+- PocReport: `kind`/`permission` absent only on a `not_allowlisted` rejection; `baseline` required from
+  `planned` on; `rejectReason` set exactly when `rejected` (enforced by the schema); spec updated.
+- A model call that fails without usage (timeout, 5xx, missing usage) is charged its worst case: input
+  upper bound at the cache-write rate plus 16K output (≤ $0.87 on terra). Fail-closed reading of "caps are
+  never bypassed"; Alex can choose zero instead. SDK retries are off: a retry is a new, cap-checked call.
+- The 24-hour check also runs before every model call (plan, design choice 2); a run stopped mid-way by it
+  will end `failed` in P3, with the cap alert the spec's Observability section requires. Index rows are written when a run ends, so other
+  in-flight runs are invisible to it; each is bounded by its own $1.50 cap.
+- Criteria baselines are owned by code (the measured median), not the model.
+- The baseline cache object (`cache/baseline/<hash>/<date>.json`) is per URL per day, outside a run's
+  four Blob objects.
 
 ## P1 spike results (2026-10-09)
 ### Lighthouse in Sandbox — pass
@@ -32,7 +48,19 @@
   step 2 adds the buttons by editing that message ("message is not modified" on a retry = done), so a
   run never has two pressable cards. Reuse this pattern for both M1/M2 gates.
 - Telegram webhook URL = branch alias + `?x-vercel-protection-bypass=…`; the secret is in
-  `apps/web/.env.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`.
+  `apps/web/.env.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`. It still points at the `m1/p1-spikes`
+  alias; re-point it at the P3 branch alias.
+- From codex round 5 (deferred, non-blocking): route tests for a wrong-user press, an invalid run ID
+  and the reject mapping; give the `spikes` workspace a typecheck and lint script.
+- From the P2 review (deferred to the step that uses them):
+  - Extract the outline's script sizes after `baseline` (`LighthouseRun.scriptBytes`, kept in the cached
+    Baseline); intake runs first and can't know them.
+  - Reconcile analyze's sections and opportunities in code before the Telegram card: drop IDs not in
+    `outline.order`, at most six opportunities, clip titles and details. Escape all model text in the card.
+  - Intake fetches with `redirect: 'manual'` (or re-checks `res.url`) so `isWithinTarget` holds after
+    redirects; it downloads image bytes for `imageDimensions`.
+  - M2: an empty criteria list must never count as success; backstop `CAPS.fixAttempts` in the fix step.
+  - M3: subpath exports so a client bundle importing poc-core never pulls `node:` built-ins.
 
 ## Investigation record (kickoff steps 2–8)
 - Package versions confirmed from npm on 2026-10-07:
