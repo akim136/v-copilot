@@ -116,3 +116,17 @@ What I expected: `get()` to return the blob's own etag, the one `put({ ifMatch }
 Severity: blocker for the 24-hour spend ceiling (a run's spend stayed out of the index until its row was added by hand). Fixed by stripping `W/` on read; a wrong tag would only conflict, never overwrite.
 Suggested fix: return `blob.etag` from the blob's metadata rather than the response header, or have `ifMatch` accept the weak form.
 Links: @vercel/blob@2.8.1, run wrun_41M4M0K7XT0GJVWYRK8Z7V88QF
+
+## 2026-10-10 · Milestone 1 · Workflow SDK (Local World)
+What happened: after `next dev` was killed during `analyze` and restarted, the run stayed `running` and nothing happened for 4.5 minutes. The Local World re-queues interrupted runs only in `world.start()`, and in a Next.js app nothing calls it unless `instrumentation.ts` does; the docs show that file only for the Postgres World. With `instrumentation.ts` added, the run was re-queued on restart but the step still waited out its 860-second inline ownership lease (`WORKFLOW_INLINE_OWNERSHIP_LEASE_SECONDS`), so `analyze` re-ran 14 minutes after it started. The data directory is `apps/web/.next/workflow-data`, not `.workflow-data`.
+What I expected: the Next.js integration to start the Local World itself (or the Local World docs to say recovery needs `instrumentation.ts`), and a dev server's own restart to release the steps that dev server owned.
+Severity: slowdown (a Verify check looked like a failure until the runtime source explained it)
+Suggested fix: call `world.start()` from `withWorkflow` in dev; release inline ownership on Local World start-up, since no other process can own the step.
+Links: workflow@5.1.0, @workflow/world-local@5.0.2, run wrun_01M4M1Q7NGKSWP7P1TKF7TBVM4
+
+## 2026-10-10 · Milestone 1 · Fluid compute (runtime logs)
+What happened: Hobby keeps runtime logs for one hour, so a failure from the morning could only be read from what had been saved locally. On a preview, the whole plan run from intake to the posted Telegram card ran inside a single `/.well-known/workflow/v1/flow` request (inline steps), so the request log shows one line with no per-step entries or durations; `workflow inspect steps` was the only way to see which step ran when. Hobby's 300-second limit also meant one Lighthouse run per step.
+What I expected: step names in the function's log lines, or a link from the request log to the run in the Workflow view.
+Severity: papercut
+Suggested fix: tag log lines emitted inside a step with the run and step IDs; show retention next to the logs view on Hobby.
+Links: preview dpl_Cue7yWyzo4iXznRacEniF3VPoHeR, run wrun_41M4KZM4PK0GSP3DHSTTSSBTE4

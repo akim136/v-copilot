@@ -1,33 +1,43 @@
 # Progress
 
 ## Status — 2026-10-10
-- **Milestone:** 1 (plan a POC), phase P4 (live checks + close-out) on branch `m1/p4-live` (pushed, no PR yet).
-  P3 merged as PR #4 (ecbec65).
-- **Last completed (live, M1 Verify):**
-  - Unlisted URL (local World): `rejected`/`not_allowlisted`, intake 56 ms, no baseline, empty trace, $0.
-  - Seeded $8 in the index (preview): `rejected`/`daily_cap`, intake 371 ms, no baseline, empty trace, $0;
-    seed row removed afterwards.
-  - Baseline from the preview: one Sandbox, three Lighthouse runs, 55 s, all nine medians; the next run on
-    the same URL read the cache in 0.3 s and started no Sandbox (`vercel sandbox ls --all`).
-  - Failure path: each failed run wrote its report and index row and sent the Telegram alert.
-- **P4 fixes (on `m1/p4-live`):** 46bc905 steps called as plain functions (the SDK serialized `this`, so the
-  first deployed run wrote nothing); 1e426e1 model errors keep the gateway's reason; 2744924 the run's
-  Sandbox is `persistent: false` and deleted after the baseline (each stopped Sandbox kept a 1.6 GB snapshot).
-- **Blocker (stop-and-ask, BYOK on the personal team):** AI Gateway answers every `gpt-5.6-terra` call with
-  403 "Free tier users do not have access to this model. Upgrade to paid credits". OIDC works (`/v1/credits`
-  200, balance $5 free, $0 used). Alex to top up Gateway credits (plan: $10 one-time) and confirm the OpenAI
-  BYOK key on akim-projects.
-- **Next step:** after the top-up, re-point the Telegram webhook to `v-copilot-git-m1-p4-live-akim-projects
-  .vercel.app` (Alex runs `set-webhook.py`; the auto-mode classifier blocks it for Claude), then preview run 3
-  on `prospect-landing` with the wrong-user press (simulated: no second Telegram account), Approve, second
-  Approve; a repeat run for cached input tokens; local kill-the-dev-server run on `prospect-docs`; record and
-  replay; then remove the spike gate, the M1 report and the P4 PR. `MODEL_MODE=live` is set (Secret, Preview)
-  for branches `m1/p3-workflow` and `m1/p4-live`; the first can be removed.
+- **Milestone:** 1 (plan a POC), phase P4 (live checks + close-out) on branch `m1/p4-live`. P3 merged as PR #4.
+- **Last completed criterion:** all M1 Verify checks passed live (2026-10-10, 22:41–23:37 UTC):
+  - Preview run wrun_41M4KZM4PK0GSP3DHSTTSSBTE4 on `prospect-landing`: baseline from the day's cache (no
+    Sandbox), `analyze` 13 s (structured, no tools, 4 criteria), one card with two buttons, paused until a press.
+    A forged press from another user ID (valid secret header) → `ignored press from non-allowed user`, run
+    still paused. Alex's Approve → `planned`. A second Approve as Alex after the gate closed → 200, run not
+    resumed. Cost $0.0289 = tokens × `pricing.ts`.
+  - Run wrun_41M4M0K7XT0GJVWYRK8Z7V88QF (same prompt): 4,435 of 4,438 input tokens read from the prompt cache,
+    $0.0205. Alex's Reject → report `rejected`/`criteria_rejected`; the run then failed its index write (below).
+  - Local record run wrun_01M4M1KVZEH14Z6M06YV742W2Z and replay run wrun_01M4M1N99W625W5S5CM7RV2VSX:
+    `comparableReport` equal, analysis and gate equal, replay span `mode: replay`, analyze step 35 ms, no new
+    recording; both $0.022553 = tokens × `pricing.ts`.
+  - Kill test, local run wrun_01M4M1Q7NGKSWP7P1TKF7TBVM4 on `prospect-docs`: dev server killed 0.3 s into
+    `analyze`, restarted; `startSandboxStep` and the three `lighthouseStep`s each started once (event log);
+    `analyze` re-ran after its 860 s inline lease, approved with `pnpm poc approve` → `planned`, $0.2411
+    (the killed attempt charged its worst case, $0.2258; its request had reached OpenAI, since the re-run read
+    4,066 of 4,069 tokens from the cache). The run's Sandbox was deleted and left no snapshot.
+  - Secret scan of every P4 run object, the index, the recording, runtime and dev logs: zero matches for the
+    six secrets in the env files.
+- **P4 fixes (on `m1/p4-live`):** 46bc905 steps called as plain functions; 1e426e1 model errors keep the
+  gateway's reason; 2744924 run Sandbox `persistent: false` and deleted; 4a603bc index writes use the strong
+  etag (`get()` returns `W/"…"` once the object is compressed at 1 KB, so every guarded write conflicted);
+  `instrumentation.ts` starts the Local World so a killed dev server's runs are re-queued; P1 spike gate removed.
+- **Next step:** codex-review and the P4 PR, then the M1 report and Alex's confirmation before Milestone 2.
+- **Blockers:** none. BYOK works on akim-projects after Alex's $10 Gateway top-up.
 - **Open for Alex:** delete the four disposable Sandbox snapshots (only `snap_lPPlYw…` is needed; they expire in
-  ~30 days); production deployment c48c65e is still the first Git deploy (protected, no sensitive vars).
-- **Model spend to date:** $0.00 real (both live calls were refused by the gateway). The index carries $0.46 of
-  worst-case charges for those two calls, as designed.
-- **Correction:** the P3 PR body said web tests were in 12 files; there are 11 (85 tests now).
+  ~30 days); remove `MODEL_MODE` for branch `m1/p3-workflow` (optional); production deployment c48c65e is still
+  the first Git deploy (protected, no sensitive vars). Decide whether a failed index write should block new runs:
+  today the alert fires but that run's spend is missing from the 24-hour total until its row is written (run
+  …88QF's row was added by hand).
+- **Model spend to date:** $0.087 measured over four completed calls ($0.0289, $0.0205, $0.0226, $0.0153), plus
+  the killed attempt, charged $0.2258 worst case (actual unknown). BYOK bills Alex's OpenAI project directly;
+  Gateway credits are untouched (`/v1/credits`: balance 15, used 0). The index carries $0.79 over 24 hours,
+  including $0.46 of worst-case charges for the two calls the gateway refused before the top-up and the replay
+  run's recorded $0.0226.
+- **Deferred (minor):** the worst-case span for a killed attempt carries the run-level `attempt` (1), the same
+  as the live span after it; `mutate.py` M14 predates the Sandbox delete.
 
 ## P3 decisions (for the PR)
 - Spend: the 24-hour spend is read in its own step right before each analyze call, and an analyze attempt
@@ -49,8 +59,7 @@
   nothing else); any run whose report write fails sends the alert.
 - Spec wording only, in Decisions: callback data carries "the run ID" (the full ID, 53 of 64 bytes), not
   "a short run ID".
-- Deferred: remove the P1 spike gate (`/api/spike`, `workflows/spike-gate.ts`, `sa`/`sr`) once the criteria
-  gate passes live in P4; give the `spikes` workspace a typecheck script; `alertStep` and the card post can
+- Deferred: give the `spikes` workspace a typecheck script; `alertStep` and the card post can
   repeat on a step retry (rare; the card pattern keeps only one pressable card).
 
 ## P2 decisions (for the PR)
