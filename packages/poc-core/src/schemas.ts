@@ -92,6 +92,8 @@ export const SpanSchema = z.strictObject({
   attempt: z.number().int().positive(),
   inputTokens: z.number().int().nonnegative(),
   cachedInputTokens: z.number().int().nonnegative(),
+  // Kept so every span's cost can be recomputed from its tokens and pricing.ts.
+  cacheWriteTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   costUsd: value,
   latencyMs: value,
@@ -110,6 +112,8 @@ export const RunIndexRowSchema = z.strictObject({
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().optional(),
   success: z.boolean().optional(),
+  // Set when the run hit a spend cap; the health job reports cap hits from the index alone.
+  capHit: z.enum(['run_cap', 'daily_cap']).optional(),
 });
 export type RunIndexRow = z.infer<typeof RunIndexRowSchema>;
 
@@ -126,7 +130,7 @@ export const PocReportSchema = z.strictObject({
   mode: z.enum(['plan', 'full', 'eval']),
   status: RunStatusSchema,
   success: z.boolean().optional(),
-  rejectReason: z.enum(['not_allowlisted', 'daily_cap']).optional(),
+  rejectReason: z.enum(['not_allowlisted', 'daily_cap', 'criteria_rejected']).optional(),
   brief: z.string(),
   criteria: z.array(CriterionSchema),
   baseline: z.strictObject({ lighthouse: MetricValuesSchema, runs: z.number().int().positive(), psiField: PsiFieldSchema.optional() }).optional(),

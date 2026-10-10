@@ -269,7 +269,7 @@ interface PocReport {
   kind?: 'fixture' | 'control'; permission?: 'owned' | 'written';   // absent only on a not_allowlisted rejection
   mode: 'plan' | 'full' | 'eval'; status: RunStatus;
   success?: boolean;                               // all criteria met and fidelity >= 0.9
-  rejectReason?: 'not_allowlisted' | 'daily_cap';
+  rejectReason?: 'not_allowlisted' | 'daily_cap' | 'criteria_rejected';   // criteria_rejected: Reject at the criteria gate
   brief: string;
   criteria: { id: string; metric: Metric; baseline: number; target: number;
               rationale: string; result?: number; met?: boolean }[];
@@ -292,8 +292,17 @@ interface PocReport {
 
 interface Span {
   runId: string; step: string; model: string; attempt: number;
-  inputTokens: number; cachedInputTokens: number; outputTokens: number;
+  inputTokens: number; cachedInputTokens: number; cacheWriteTokens: number; outputTokens: number;
   costUsd: number; latencyMs: number; mode: 'live' | 'record' | 'replay'; startedAt: string;
+}
+// A model step whose earlier attempt died without recording usage is charged that attempt's worst case
+// (every input token at the cache-write rate plus full output) as an extra span, so spend is never understated.
+
+interface RunIndexRow {                           // one per run in runs/index.json; written with an etag (ifMatch)
+  runId: string; target: string;                   // target is '_unlisted' on a not_allowlisted rejection
+  mode: 'plan' | 'full' | 'eval'; status: RunStatus; costUsd: number;
+  startedAt: string; endedAt?: string; success?: boolean;
+  capHit?: 'run_cap' | 'daily_cap';               // the health job reads cap hits from the index alone
 }
 
 interface Health {
@@ -320,7 +329,7 @@ interface EvalResult {
 
 ```
 Blob layout
-pocs/<target>/<runId>/bundle.json           report, spec, measurements, trace
+pocs/<target>/<runId>/bundle.json           report, spec, measurements, trace (<target> is _unlisted on a not_allowlisted rejection)
 pocs/<target>/<runId>/report.md
 pocs/<target>/<runId>/screenshot-original.png
 pocs/<target>/<runId>/screenshot-preview.png

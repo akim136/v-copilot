@@ -100,7 +100,7 @@ function toUsage(u: LanguageModelUsage | undefined): TokenUsage | undefined {
 
 // The most a call could have cost: every possible input token billed at the cache-write rate, plus full
 // output. Charged whenever a call fails without usage, so spend is never understated.
-function worstCaseUsage(system: string, prompt: string): TokenUsage {
+export function worstCaseUsage(system: string, prompt: string): TokenUsage {
   const input = inputTokenUpperBound(system, prompt);
   return { inputTokens: input, cachedInputTokens: 0, cacheWriteTokens: input, outputTokens: MAX_OUTPUT_TOKENS };
 }
@@ -129,8 +129,8 @@ export async function callModel<T>(call: ModelCall<T>): Promise<ModelResult<T>> 
   const startedAt = (call.now ?? (() => new Date()))().toISOString();
   const span = (usage: TokenUsage, latencyMs: number): Span => ({
     runId: call.runId, step: call.step, model, attempt: call.attempt,
-    inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens, outputTokens: usage.outputTokens,
-    costUsd: costUsd(model, usage), latencyMs, mode: call.mode, startedAt,
+    inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens, cacheWriteTokens: usage.cacheWriteTokens,
+    outputTokens: usage.outputTokens, costUsd: costUsd(model, usage), latencyMs, mode: call.mode, startedAt,
   });
   const file = join(call.recordingsDir, `${key}.json`);
 

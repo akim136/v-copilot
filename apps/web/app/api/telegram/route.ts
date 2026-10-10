@@ -1,24 +1,37 @@
 import { resumeHook } from 'workflow/api';
 import { HookNotFoundError } from 'workflow/errors';
+import { CRITERIA_BUTTONS, criteriaToken, type GateDecision } from '@/lib/gates';
 import { RUN_ID } from '@/lib/run-id';
 import { getBot, isAlex } from '@/lib/telegram';
 import { spikeToken, type SpikeDecision } from '@/workflows/spike-gate';
+
+// Button ID → resume the hook it belongs to with the decision it carries.
+const spike = (decision: SpikeDecision['decision']) => (runId: string, userId: string) =>
+  resumeHook(spikeToken(runId), { decision, userId } satisfies SpikeDecision);
+const criteria = (decision: GateDecision['decision']) => (runId: string, userId: string) =>
+  resumeHook(criteriaToken(runId), { decision, userId, via: 'telegram' } satisfies GateDecision);
+const BUTTONS: Record<string, (runId: string, userId: string) => Promise<unknown>> = {
+  sa: spike('approve'),
+  sr: spike('reject'),
+  [CRITERIA_BUTTONS.approve]: criteria('approve'),
+  [CRITERIA_BUTTONS.reject]: criteria('reject'),
+};
 
 let registered = false;
 
 function register() {
   if (registered) return;
   registered = true;
-  getBot().onAction(['sa', 'sr'], async (e) => {
+  getBot().onAction(Object.keys(BUTTONS), async (e) => {
     // The adapter has already verified the secret-token header. Only Alex may press.
     if (!isAlex(e.user.userId)) {
       console.warn('telegram: ignored press from non-allowed user');
       return;
     }
-    if (!e.value || !RUN_ID.test(e.value)) return;
-    const payload: SpikeDecision = { decision: e.actionId === 'sa' ? 'approve' : 'reject', userId: e.user.userId };
+    const resume = Object.hasOwn(BUTTONS, e.actionId) ? BUTTONS[e.actionId] : undefined;
+    if (!resume || !e.value || !RUN_ID.test(e.value)) return;
     try {
-      await resumeHook(spikeToken(e.value), payload);
+      await resume(e.value, e.user.userId);
     } catch (err) {
       if (err instanceof HookNotFoundError || (err as Error)?.name === 'HookNotFoundError') {
         // The gate is already consumed; the reply is a courtesy and must not trigger a redelivery.
