@@ -1,5 +1,5 @@
 import { buildPocReport, checkAllowlist, renderReportMarkdown, type ReportTarget, type TargetsConfig } from '@v-copilot/poc-core';
-import { redactSecrets } from '@/lib/redact';
+import { redactDeep, redactSecrets } from '@/lib/redact';
 import type { Store } from '@/lib/store';
 import type { ReportRequest } from './types';
 
@@ -7,14 +7,16 @@ import type { ReportRequest } from './types';
 export const runDir = (targetName: string | undefined, runId: string) => `pocs/${targetName ?? '_unlisted'}/${runId}`;
 
 // Writes the run's two plan-mode objects, bundle.json and report.md (screenshots arrive in M2, for four
-// at most). Both pass through redactSecrets whole, so no known secret can reach Blob.
-export async function writeReport(store: Store, targets: TargetsConfig, req: ReportRequest): Promise<void> {
+// at most). Every string is redacted before rendering, and both objects again whole, so no known secret
+// can reach Blob, escaped or not.
+export async function writeReport(store: Store, targets: TargetsConfig, raw: ReportRequest): Promise<void> {
+  const req = redactDeep(raw);
   const allowed = checkAllowlist(targets, req.targetName ?? req.input.target);
   const target: ReportTarget = allowed.ok
     ? { name: allowed.target.name, url: allowed.target.url, kind: allowed.target.kind, permission: allowed.target.permission }
     : { requested: req.input.target };
   const targetName = allowed.ok ? allowed.target.name : undefined;
-  const error = req.error === undefined ? undefined : redactSecrets(req.error);
+  const { error } = req;
 
   const report = buildPocReport({
     runId: req.runId, mode: req.input.mode, brief: req.input.brief, status: req.status,

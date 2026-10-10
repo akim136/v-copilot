@@ -36,14 +36,18 @@ export async function startSandbox(runId: string): Promise<SandboxHandle> {
     resources: { vcpus: SANDBOX_VCPUS },
     timeout: SANDBOX_TIMEOUT_MS,
   });
-  const find = await sbx.runCommand({
-    cmd: 'bash', args: ['-lc', 'find / -name chrome -type f -path "*chrome-linux*" 2>/dev/null | head -1'], sudo: true,
-  });
-  const chromePath = (await find.stdout()).trim();
-  if (find.exitCode !== 0 || !chromePath) {
-    // A retry would find the same snapshot, so stop the Sandbox now rather than leave it to time out.
+  let chromePath: string;
+  try {
+    const find = await sbx.runCommand({
+      cmd: 'bash', args: ['-lc', 'find / -name chrome -type f -path "*chrome-linux*" 2>/dev/null | head -1'], sudo: true,
+    });
+    chromePath = (await find.stdout()).trim();
+    // A retry would find the same snapshot.
+    if (find.exitCode !== 0 || !chromePath) throw new FatalError('Chromium not found in the Sandbox snapshot');
+  } catch (err) {
+    // The step gets no handle to stop, so stop the Sandbox here rather than leave it to time out.
     await sbx.stop().catch(() => {});
-    throw new FatalError('Chromium not found in the Sandbox snapshot');
+    throw err;
   }
   return { name: sbx.name, chromePath };
 }

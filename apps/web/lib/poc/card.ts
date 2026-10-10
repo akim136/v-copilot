@@ -9,6 +9,9 @@ const SHOWN_METRICS = ['performance', 'lcp', 'cls', 'tbt'] as const;
 
 // The card's lines. The adapter reads them as Markdown, so each line is stripped of known secrets and
 // escaped whole; with the clips below the message stays well under Telegram's 4,096 characters.
+// The model may propose any number of criteria; the card names a few of those code dropped.
+const MAX_DROPPED_SHOWN = 3;
+
 export function criteriaCardLines(c: CriteriaCard): string[] {
   const lines = [
     `Run ${c.runId}`,
@@ -23,7 +26,11 @@ export function criteriaCardLines(c: CriteriaCard): string[] {
   } else {
     lines.push('No criteria survived the checks in code.');
   }
-  if (c.dropped.length) lines.push(`Dropped in code: ${c.dropped.map((d) => `${d.metric} (${d.reason})`).join(', ')}`);
+  if (c.dropped.length) {
+    const shown = c.dropped.slice(0, MAX_DROPPED_SHOWN).map((d) => `${oneLine(d.metric, 20)} (${oneLine(d.reason, 60)})`).join(', ');
+    const more = c.dropped.length - MAX_DROPPED_SHOWN;
+    lines.push(`Dropped in code: ${shown}${more > 0 ? `, and ${more} more` : ''}`);
+  }
   if (c.opportunities.length) lines.push(`Top opportunities: ${c.opportunities.slice(0, 2).map((o) => oneLine(o, 80)).join('; ')}`);
   lines.push(`Model spend so far: $${c.costUsd.toFixed(4)}`);
   return lines.map((l) => e(redactSecrets(l)));

@@ -2,12 +2,12 @@
 
 ## Status — 2026-10-10
 - **Milestone:** 1 (plan a POC), phase P3 (workflow + surfaces) on branch `m1/p3-workflow`, in review.
-- **Last completed:** P3 code, review rounds 1–2 fixes. `pocWorkflow` (plan mode): intake, baseline (cache hit
+- **Last completed:** P3 code, review rounds 1–3 fixes. `pocWorkflow` (plan mode): intake, baseline (cache hit
   or one Sandbox with three per-step Lighthouse runs), analyze (cap-checked, one retry on a retryable
   failure), criteria gate on a Workflow hook with the Telegram card, report (`bundle.json` + `report.md`),
-  `runs/index.json` row, alert on failure or cap. `/api/poc` admin route, `pnpm poc` CLI. Web 82 tests,
+  `runs/index.json` row, alert on failure or cap. `/api/poc` admin route, `pnpm poc` CLI. Web 84 tests,
   poc-core 170; 14 mutations of the key guards all caught; full turbo check green. Not yet pushed.
-- **Next step:** codex-review round 3 on P3, then push and open the P3 PR (Alex confirms the push). Then
+- **Next step:** codex-review round 4 on P3, then push and open the P3 PR (Alex confirms the push). Then
   P4: re-point the Telegram webhook to the P3 branch alias, set `MODEL_MODE=live` on Preview, one live
   BYOK plan run on `prospect-landing`, the M1 Verify list, the M1 report.
 - **Blockers:** none. Open decision for Alex: the first Git deploy (c48c65e) is still the production

@@ -57,7 +57,7 @@ describe('writeReport', () => {
   });
 
   describe('secrets', () => {
-    const canary = { TELEGRAM_BOT_TOKEN: '7000000001:AAcanaryBotTokenValue0123456789abcdef', CRON_SECRET: 'canary-cron-secret-value', POC_TOKEN_SECRET: 'canary-poc-token-secret', ADMIN_API_TOKEN: 'canary-admin-api-token' };
+    const canary = { TELEGRAM_BOT_TOKEN: '7000000001:AAcanaryBotTokenValue0123456789abcdef', CRON_SECRET: 'canary-cron-secret-value', POC_TOKEN_SECRET: 'canary-poc-token-secret', ADMIN_API_TOKEN: 'canary_admin-api.token!' };
     beforeEach(() => Object.assign(process.env, canary));
     afterEach(() => { for (const k of Object.keys(canary)) delete process.env[k]; });
 
@@ -67,7 +67,11 @@ describe('writeReport', () => {
       await writeReport(mem.store, targets, request({ status: 'failed', error: `analyze failed: ${leak}`, input: { target: 'prospect-landing', brief: `brief ${canary.ADMIN_API_TOKEN}`, mode: 'plan' } }));
       const written = [...mem.objects.values()].map((o) => o.body).join('\n');
       expect(written).toContain('[redacted]');
-      for (const v of Object.values(canary)) expect(written).not.toContain(v);
+      // Markdown escaping must not hide a secret from redaction: check with the escapes removed too.
+      for (const v of Object.values(canary)) {
+        expect(written).not.toContain(v);
+        expect(written.replace(/\\/g, '')).not.toContain(v);
+      }
     });
   });
 });

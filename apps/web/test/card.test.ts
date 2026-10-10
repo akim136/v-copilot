@@ -94,6 +94,13 @@ describe('criteria card', () => {
     expect(lines.join('\n').length).toBeLessThan(4096);
   });
 
+  it('caps the dropped list, however many criteria the model proposed', () => {
+    const dropped = Array.from({ length: 200 }, () => ({ metric: 'lcp', reason: 'duplicate metric' }));
+    const shown = criteriaCardLines(card({ dropped })).join('\n');
+    expect(shown.length).toBeLessThan(4096);
+    expect(shown.replace(/\\(.)/g, '$1')).toContain('and 197 more');
+  });
+
   it('escapes and redacts alerts', async () => {
     process.env.TELEGRAM_BOT_TOKEN = '1234567890:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     await sendAlert(`run failed: [x](https://evil.example) token ${process.env.TELEGRAM_BOT_TOKEN}`);

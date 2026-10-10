@@ -13,6 +13,7 @@ const sbx = vi.hoisted(() => ({
   created: [] as unknown[],
   stopped: 0,
   lighthouseExit: 0,
+  findThrows: false,
   chrome: '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n',
   result: undefined as Buffer | undefined,
 }));
@@ -21,6 +22,7 @@ vi.mock('@vercel/sandbox', () => {
     name,
     runCommand: async (c: { cmd: string; args: string[]; env?: Record<string, string>; sudo?: boolean }) => {
       sbx.commands.push(c);
+      if (c.cmd === 'bash' && sbx.findThrows) throw new Error('sandbox unreachable');
       const exitCode = c.cmd === 'lighthouse' ? sbx.lighthouseExit : 0;
       return { exitCode, stdout: async () => (c.cmd === 'bash' ? sbx.chrome : ''), stderr: async () => '' };
     },
@@ -51,6 +53,7 @@ describe('baseline', () => {
     sbx.lighthouseExit = 0;
     sbx.chrome = '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n';
     sbx.result = undefined;
+    sbx.findThrows = false;
   });
 
   it('starts one named Sandbox from the snapshot and finds Chromium', async () => {
@@ -114,6 +117,12 @@ describe('baseline', () => {
     sbx.chrome = '';
     const err = await startSandbox(RUN).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FatalError);
+    expect(sbx.stopped).toBe(1);
+  });
+
+  it('stops the Sandbox when the Chromium lookup itself fails', async () => {
+    sbx.findThrows = true;
+    await expect(startSandbox(RUN)).rejects.toThrow('sandbox unreachable');
     expect(sbx.stopped).toBe(1);
   });
 

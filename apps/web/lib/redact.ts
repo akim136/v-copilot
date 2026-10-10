@@ -14,3 +14,12 @@ export function redactSecrets(text: string): string {
   }
   return out;
 }
+
+// Every string inside a value, redacted. Runs before any Markdown escaping, which would split a secret's
+// characters with backslashes and hide it from redactSecrets.
+export function redactDeep<T>(value: T): T {
+  if (typeof value === 'string') return redactSecrets(value) as T;
+  if (Array.isArray(value)) return value.map((v: unknown) => redactDeep(v)) as T;
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactDeep(v)])) as T;
+  return value;
+}
