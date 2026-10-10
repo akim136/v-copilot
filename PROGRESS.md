@@ -24,7 +24,8 @@
   gateway's reason; 2744924 run Sandbox `persistent: false` and deleted; 4a603bc index writes use the strong
   etag (`get()` returns `W/"…"` once the object is compressed at 1 KB, so every guarded write conflicted);
   `instrumentation.ts` starts the Local World so a killed dev server's runs are re-queued; P1 spike gate removed.
-- **Next step:** codex-review and the P4 PR, then the M1 report and Alex's confirmation before Milestone 2.
+- **Next step:** Alex reviews and merges PR #5 (codex-review approve, 0 blocking; CI green) and confirms the M1
+  report; then Milestone 2.
 - **Blockers:** none. BYOK works on akim-projects after Alex's $10 Gateway top-up.
 - **Open for Alex:** delete the four disposable Sandbox snapshots (only `snap_lPPlYw…` is needed; they expire in
   ~30 days); remove `MODEL_MODE` for branch `m1/p3-workflow` (optional); production deployment c48c65e is still
