@@ -126,6 +126,13 @@ describe('blobStore', () => {
     expect(blob.get).toHaveBeenCalledWith('runs/index.json', { access: 'private', useCache: false });
   });
 
+  it('returns the strong etag when Blob serves a compressed copy under a weak one', async () => {
+    // Seen live once runs/index.json reached 1 KB: get() gave W/"…" and head() "…"; an ifMatch with the
+    // weak form never matches, so every guarded write conflicted.
+    blob.get.mockResolvedValueOnce({ statusCode: 200, stream: new Response('{"a":1}').body, blob: { etag: 'W/"a2ab2b0be5805f871e2f2a5e34422075"' } });
+    expect(await blobStore().read('runs/index.json')).toEqual({ body: '{"a":1}', etag: '"a2ab2b0be5805f871e2f2a5e34422075"' });
+  });
+
   it('refuses a guarded write with an empty etag, which Blob would send as an unguarded overwrite', async () => {
     await expect(blobStore().write('runs/index.json', '[]', { contentType: 'application/json', mode: { ifMatch: '' } })).rejects.toThrow(/etag/);
     expect(blob.put).not.toHaveBeenCalled();

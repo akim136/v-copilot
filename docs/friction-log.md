@@ -109,3 +109,10 @@ What I expected: one-off Sandboxes not to snapshot themselves on stop, or the Ho
 Severity: slowdown (found by listing Sandboxes; the run's Sandbox is now created with `persistent: false` and deleted after the baseline)
 Suggested fix: default `persistent` to false for Sandboxes created from a snapshot, and warn when snapshot storage nears the plan limit.
 Links: @vercel/sandbox@3.5.1
+
+## 2026-10-10 · Milestone 1 · Vercel Blob
+What happened: once `runs/index.json` reached 1,024 bytes, every etag-guarded write to it failed. `get(path, { useCache: false })` returned the etag from a compressed response, in weak form (`W/"a2ab…"`), while `head()` returned the strong form (`"a2ab…"`). `put({ ifMatch })` compares strongly, so the weak etag never matched, and run wrun_41M4M0K7XT0GJVWYRK8Z7V88QF failed its index write 20 times (5 tries × 4 step attempts) with no other writer. Smaller objects come back uncompressed with a strong etag, so the bug only shows up once the object grows.
+What I expected: `get()` to return the blob's own etag, the one `put({ ifMatch })` and `head()` use.
+Severity: blocker for the 24-hour spend ceiling (a run's spend stayed out of the index until its row was added by hand). Fixed by stripping `W/` on read; a wrong tag would only conflict, never overwrite.
+Suggested fix: return `blob.etag` from the blob's metadata rather than the response header, or have `ifMatch` accept the weak form.
+Links: @vercel/blob@2.8.1, run wrun_41M4M0K7XT0GJVWYRK8Z7V88QF
