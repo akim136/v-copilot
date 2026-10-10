@@ -13,7 +13,6 @@ class HookNotFoundError extends Error {
 
 vi.mock('workflow/errors', () => ({ HookNotFoundError }));
 vi.mock('workflow/api', () => ({ resumeHook: h.resumeHook }));
-vi.mock('@/workflows/spike-gate', () => ({ spikeToken: (id: string) => `spike:${id}` }));
 vi.mock('@/lib/telegram', () => ({
   isAlex: (id: string) => id === '1234567890',
   getBot: () => ({
@@ -30,7 +29,7 @@ vi.mock('@/lib/telegram', () => ({
 
 const RUN = 'wrun_41M4GCW7PK0GZN9PC2CX634QPA';
 const press = {
-  actionId: 'sa',
+  actionId: 'ca',
   value: RUN as string,
   user: { userId: '1234567890' },
   thread: {
@@ -49,13 +48,13 @@ describe('telegram route', () => {
     h.resumeHook.mockReset();
     h.replyFails = false;
     h.replies = [];
-    Object.assign(press, { actionId: 'sa', value: RUN, user: { userId: '1234567890' } });
+    Object.assign(press, { actionId: 'ca', value: RUN, user: { userId: '1234567890' } });
   });
 
   it('resumes the hook for Alex and acknowledges', async () => {
     h.resumeHook.mockResolvedValue({});
     expect((await call()).status).toBe(200);
-    expect(h.resumeHook).toHaveBeenCalledWith(`spike:${RUN}`, { decision: 'approve', userId: '1234567890' });
+    expect(h.resumeHook).toHaveBeenCalledWith(`criteria:${RUN}`, { decision: 'approve', userId: '1234567890', via: 'telegram' });
   });
 
   it('acknowledges a press on an already-handled gate', async () => {
@@ -75,11 +74,12 @@ describe('telegram route', () => {
     expect((await call()).status).toBe(500);
   });
 
-  it('maps the spike Reject button to a reject on the spike hook', async () => {
-    h.resumeHook.mockResolvedValue({});
-    Object.assign(press, { actionId: 'sr' });
-    expect((await call()).status).toBe(200);
-    expect(h.resumeHook).toHaveBeenCalledWith(`spike:${RUN}`, { decision: 'reject', userId: '1234567890' });
+  it('ignores the removed P1 spike buttons', async () => {
+    for (const actionId of ['sa', 'sr']) {
+      Object.assign(press, { actionId });
+      expect((await call()).status).toBe(200);
+    }
+    expect(h.resumeHook).not.toHaveBeenCalled();
   });
 
   it('maps the criteria buttons to the criteria hook with the decision and its source', async () => {
