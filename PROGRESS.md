@@ -1,18 +1,33 @@
 # Progress
 
 ## Status — 2026-10-10
-- **Milestone:** 1 (plan a POC), phase P3 (workflow + surfaces) on branch `m1/p3-workflow`, in review.
-- **Last completed:** P3 code, review rounds 1–3 fixes. `pocWorkflow` (plan mode): intake, baseline (cache hit
-  or one Sandbox with three per-step Lighthouse runs), analyze (cap-checked, one retry on a retryable
-  failure), criteria gate on a Workflow hook with the Telegram card, report (`bundle.json` + `report.md`),
-  `runs/index.json` row, alert on failure or cap. `/api/poc` admin route, `pnpm poc` CLI. Web 84 tests,
-  poc-core 170; 14 mutations of the key guards all caught; full turbo check green. Not yet pushed.
-- **Next step:** codex-review round 4 on P3, then push and open the P3 PR (Alex confirms the push). Then
-  P4: re-point the Telegram webhook to the P3 branch alias, set `MODEL_MODE=live` on Preview, one live
-  BYOK plan run on `prospect-landing`, the M1 Verify list, the M1 report.
-- **Blockers:** none. Open decision for Alex: the first Git deploy (c48c65e) is still the production
-  deployment on `v-copilot.vercel.app` (protected; no sensitive vars; `/api/spike` and `/api/poc` 404 there).
-- **Model spend to date:** $0.00 (P3 made no live calls). Sandbox use unchanged since P1.
+- **Milestone:** 1 (plan a POC), phase P4 (live checks + close-out) on branch `m1/p4-live` (pushed, no PR yet).
+  P3 merged as PR #4 (ecbec65).
+- **Last completed (live, M1 Verify):**
+  - Unlisted URL (local World): `rejected`/`not_allowlisted`, intake 56 ms, no baseline, empty trace, $0.
+  - Seeded $8 in the index (preview): `rejected`/`daily_cap`, intake 371 ms, no baseline, empty trace, $0;
+    seed row removed afterwards.
+  - Baseline from the preview: one Sandbox, three Lighthouse runs, 55 s, all nine medians; the next run on
+    the same URL read the cache in 0.3 s and started no Sandbox (`vercel sandbox ls --all`).
+  - Failure path: each failed run wrote its report and index row and sent the Telegram alert.
+- **P4 fixes (on `m1/p4-live`):** 46bc905 steps called as plain functions (the SDK serialized `this`, so the
+  first deployed run wrote nothing); 1e426e1 model errors keep the gateway's reason; 2744924 the run's
+  Sandbox is `persistent: false` and deleted after the baseline (each stopped Sandbox kept a 1.6 GB snapshot).
+- **Blocker (stop-and-ask, BYOK on the personal team):** AI Gateway answers every `gpt-5.6-terra` call with
+  403 "Free tier users do not have access to this model. Upgrade to paid credits". OIDC works (`/v1/credits`
+  200, balance $5 free, $0 used). Alex to top up Gateway credits (plan: $10 one-time) and confirm the OpenAI
+  BYOK key on akim-projects.
+- **Next step:** after the top-up, re-point the Telegram webhook to `v-copilot-git-m1-p4-live-akim-projects
+  .vercel.app` (Alex runs `set-webhook.py`; the auto-mode classifier blocks it for Claude), then preview run 3
+  on `prospect-landing` with the wrong-user press (simulated: no second Telegram account), Approve, second
+  Approve; a repeat run for cached input tokens; local kill-the-dev-server run on `prospect-docs`; record and
+  replay; then remove the spike gate, the M1 report and the P4 PR. `MODEL_MODE=live` is set (Secret, Preview)
+  for branches `m1/p3-workflow` and `m1/p4-live`; the first can be removed.
+- **Open for Alex:** delete the four disposable Sandbox snapshots (only `snap_lPPlYw…` is needed; they expire in
+  ~30 days); production deployment c48c65e is still the first Git deploy (protected, no sensitive vars).
+- **Model spend to date:** $0.00 real (both live calls were refused by the gateway). The index carries $0.46 of
+  worst-case charges for those two calls, as designed.
+- **Correction:** the P3 PR body said web tests were in 12 files; there are 11 (85 tests now).
 
 ## P3 decisions (for the PR)
 - Spend: the 24-hour spend is read in its own step right before each analyze call, and an analyze attempt

@@ -88,3 +88,24 @@ Severity: papercut
 Suggested fix: persist the session's environment variables with the snapshot, or let `snapshot()` record an env map.
 Links: @vercel/sandbox@3.5.1, snapshot snap_lPPlYwCXqDdth3n0ga8azg5WQuN2
 
+
+## 2026-10-10 · Milestone 1 · Workflow SDK
+What happened: the first deployed plan run failed in under two seconds and wrote nothing, not even its failure report. The steps were passed to a pure function as fields of a deps object and called as `d.recordRun(row)`, and the runtime serializes a step's `this`, so every call failed with "Failed to serialize step arguments at path .thisVal.now" (the object also holds plain functions). The error was only in the deployment's runtime logs; unit tests with a mocked runtime can't see it.
+What I expected: a step called as a method to ignore `this`, or the build (or the SWC transform) to warn when a step is referenced as a value.
+Severity: blocker until found (fixed by calling each step through an arrow function, with a test that no step receives a `this`)
+Suggested fix: don't capture `this` for top-level step functions, or document it next to the serialization rules.
+Links: workflow@5.1.0, run wrun_41M4KS6FNB0GVH2T2NZREAWZNT
+
+## 2026-10-10 · Milestone 1 · AI Gateway
+What happened: the first live `analyze` call from a preview failed with `GatewayInternalServerError (status 403)`. The reason, only in the error's message, was "Free tier users do not have access to this model. Upgrade to paid credits…". OIDC auth worked (`/v1/credits` returned 200, balance 5, used 0) and BYOK was set up, but a free-tier team can't reach `gpt-5.6-terra` at all, so the OpenAI key was never tried. Nothing in `/v1/models` or `/v1/credits` says which models a team's tier can call.
+What I expected: an `authorization`- or `tier`-typed error (not "internal server error"), and the tier or model access visible in the API before the first call.
+Severity: blocker (stop-and-ask: BYOK fails on the personal team)
+Suggested fix: return a distinct error type for tier restrictions; show the tier in `/v1/credits`; say on the BYOK page that BYOK needs paid credits.
+Links: @ai-sdk/gateway@4.0.106, runs wrun_41M4KW00JE0GXE84P6A2Y8JF3C and wrun_41M4KW928V0GS5D5EKDM8SC6CC
+
+## 2026-10-10 · Milestone 1 · Vercel Sandbox
+What happened: every stopped Sandbox kept a 1.6 GB snapshot of itself for 30 days (`vercel sandbox snapshots ls`), because Sandboxes are persistent by default. After P1's spikes and one live baseline there were five, about 8 GB of Hobby's 15 GB snapshot storage, so about nine baselines a month would have hit the limit.
+What I expected: one-off Sandboxes not to snapshot themselves on stop, or the Hobby limit to be shown next to the persistence default.
+Severity: slowdown (found by listing Sandboxes; the run's Sandbox is now created with `persistent: false` and deleted after the baseline)
+Suggested fix: default `persistent` to false for Sandboxes created from a snapshot, and warn when snapshot storage nears the plan limit.
+Links: @vercel/sandbox@3.5.1
