@@ -16,6 +16,7 @@ describe('poc CLI base URL', () => {
       'http://v-copilot-git-m1-p3-workflow-akim-projects.vercel.app',
       'https://evil.example',
       'https://v-copilot.vercel.app',
+      'https://someone-else-akim-projects.vercel.app',
       'https://v-copilot-akim-projects.vercel.app.evil.example',
       'not a url',
     ]) expect(() => pocBaseUrl(raw)).toThrow();

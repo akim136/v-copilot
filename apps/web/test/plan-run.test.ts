@@ -1,8 +1,10 @@
-import { LIGHTHOUSE_RUNS as CORE_LIGHTHOUSE_RUNS, type Baseline, type LighthouseRun, type RunIndexRow, type Span } from '@v-copilot/poc-core';
+import { LIGHTHOUSE_RUNS as CORE_LIGHTHOUSE_RUNS, parseTargetsConfig, type Baseline, type LighthouseRun, type RunIndexRow, type Span } from '@v-copilot/poc-core';
 import { describe, expect, it, vi } from 'vitest';
 import type { GateDecision } from '@/lib/gates';
 import type { AnalyzeResult, IntakeResult, ReportRequest } from '@/lib/poc/types';
+import { writeReport as realWriteReport } from '@/lib/poc/report';
 import { LIGHTHOUSE_RUNS, planRun, type PlanDeps } from '@/workflows/plan-run';
+import { memoryStore } from './fakes';
 
 const RUN = 'wrun_01K7AAAAAAAAAAAAAAAAAAAAAA';
 const median = { performance: 61, lcp: 18329.984, cls: 0.1267, tbt: 229, fcp: 2245.984, ttfb: 47, jsBytes: 59676, accessibility: 85, seo: 82 };
@@ -52,6 +54,10 @@ function fakeDeps(over: Partial<PlanDeps> = {}) {
   return { d, calls };
 }
 const input = { target: 'prospect-landing', brief: 'Make it fast', mode: 'plan' as const };
+const targets = parseTargetsConfig({ 'prospect-landing': { url: baseline.url, permission: 'owned', kind: 'fixture' } });
+// The first report write fails; the fallback goes through the real report builder, schema included.
+const flakyThenReal = (store: ReturnType<typeof memoryStore>['store']) =>
+  vi.fn().mockRejectedValueOnce(new Error('blob down')).mockImplementation((r: ReportRequest) => realWriteReport(store, targets, r));
 
 describe('planRun', () => {
   it('uses the same number of Lighthouse runs as poc-core', () => {
@@ -187,13 +193,31 @@ describe('planRun', () => {
     expect(calls.reports.at(-1)).toMatchObject({ targetName: 'prospect-landing', status: 'failed' });
   });
 
-  it('drops the reject reason when a rejected run then fails to write its report', async () => {
-    const writeReport = vi.fn().mockRejectedValueOnce(new Error('blob down')).mockResolvedValueOnce(undefined);
+  it('writes a valid fallback report when a rejected run fails to write its report', async () => {
+    const mem = memoryStore();
+    const writeReport = flakyThenReal(mem.store);
     const { d, calls } = fakeDeps({ writeReport, awaitCriteria: vi.fn(async (): Promise<GateDecision> => ({ ...approve, decision: 'reject' })) });
     await expect(planRun(input, d)).rejects.toThrow('blob down');
-    const fallback = writeReport.mock.calls.at(-1)![0] as ReportRequest;
-    expect(fallback.status).toBe('failed');
-    expect(fallback.rejectReason).toBeUndefined();
+    expect(writeReport).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(mem.objects.get(`pocs/prospect-landing/${RUN}/bundle.json`)!.body).report).toMatchObject({ status: 'failed' });
     expect(calls.rows[0]!.status).toBe('failed');
+    expect(calls.alerts).toHaveLength(1);
+  });
+
+  it('writes a valid fallback report, and alerts, when a not-allowlisted run fails to write its report', async () => {
+    const mem = memoryStore();
+    const writeReport = flakyThenReal(mem.store);
+    const { d, calls } = fakeDeps({ writeReport, intake: vi.fn(async (): Promise<IntakeResult> => ({ ok: false, reason: 'not_allowlisted' })) });
+    await expect(planRun({ ...input, target: 'https://evil.example/' }, d)).rejects.toThrow('blob down');
+    expect(JSON.parse(mem.objects.get(`pocs/_unlisted/${RUN}/bundle.json`)!.body).report).toMatchObject({ status: 'rejected', rejectReason: 'not_allowlisted' });
+    expect(calls.rows[0]).toMatchObject({ target: '_unlisted', status: 'rejected' });
+    expect(calls.alerts).toHaveLength(1);
+  });
+
+  it('trusts intake over the earlier lookup when intake refuses the target', async () => {
+    const { d, calls } = fakeDeps({ intake: vi.fn(async (): Promise<IntakeResult> => ({ ok: false, reason: 'not_allowlisted' })) });
+    await planRun(input, d);
+    expect(calls.reports[0]!.targetName).toBeUndefined();
+    expect(calls.rows[0]!.target).toBe('_unlisted');
   });
 });

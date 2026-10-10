@@ -93,6 +93,7 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
     if (!intake.ok) {
       status = 'rejected';
       rejectReason = intake.reason;
+      if (intake.reason === 'not_allowlisted') targetName = undefined;
       if (intake.reason === 'daily_cap') {
         targetName = intake.targetName;
         capHit = 'daily_cap';
@@ -148,16 +149,18 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
     await d.writeReport(report());
   } catch (err) {
     error = `${phase} failed: ${messageOf(err)}`;
-    status = 'failed';
-    // Only a rejected run carries a reject reason.
-    rejectReason = undefined;
+    // A not-allowlisted request stays a rejection: a report for an unlisted target can be nothing else.
+    if (rejectReason !== 'not_allowlisted') {
+      status = 'failed';
+      rejectReason = undefined;
+    }
     thrown = { err };
     await d.writeReport(report()).catch(() => {});
   }
 
   // Every run, however it ended: one alert if it failed or hit a cap, then its row in the index.
   const costUsd = sum(spans);
-  if (status === 'failed' || capHit) {
+  if (status === 'failed' || capHit || thrown) {
     await d.alert(`v-copilot run ${d.runId} (${targetName ?? 'not allowlisted'}): ${status}. ${error ?? ''} Spend ${usd(costUsd)}.`).catch(() => {});
   }
   const row: RunIndexRow = {

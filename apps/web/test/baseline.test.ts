@@ -117,11 +117,15 @@ describe('baseline', () => {
     expect(sbx.stopped).toBe(1);
   });
 
-  it('refuses a measurement of any page but the target', async () => {
-    sbx.result = Buffer.from(JSON.stringify({ ...JSON.parse(lhr.toString('utf8')), finalDisplayedUrl: 'https://evil.example/' }));
+  it('refuses a measurement whose main document was not the target', async () => {
+    const withUrls = (o: object) => Buffer.from(JSON.stringify({ ...JSON.parse(lhr.toString('utf8')), ...o }));
+    sbx.result = withUrls({ mainDocumentUrl: 'https://evil.example/' });
     const err = await runLighthouse({ name: 'poc-x', chromePath: '/chrome' }, target, 0).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FatalError);
     expect(String(err)).toMatch(/evil\.example/);
+    // A page that rewrites its own URL after loading was still measured at the target.
+    sbx.result = withUrls({ mainDocumentUrl: target.url, finalDisplayedUrl: `${target.url}#/home` });
+    await expect(runLighthouse({ name: 'poc-x', chromePath: '/chrome' }, target, 0)).resolves.toMatchObject({ lighthouseVersion: '13.5.0' });
   });
 
   it('stops the Sandbox by name', async () => {

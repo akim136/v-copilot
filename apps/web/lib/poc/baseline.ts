@@ -59,9 +59,16 @@ export async function runLighthouse(handle: SandboxHandle, target: AllowedTarget
   if (!file) throw new Error('lighthouse wrote no result');
   const lhr: unknown = JSON.parse(file.toString('utf8'));
   // Chrome follows redirects that intake refuses; a measurement of any other page must not become the baseline.
-  const measured = (lhr as { finalDisplayedUrl?: unknown } | null)?.finalDisplayedUrl;
-  if (measured !== target.url) throw new FatalError(`Lighthouse measured ${String(measured)} instead of ${target.url}`);
+  // mainDocumentUrl is where the document came from after redirects (finalDisplayedUrl follows pushState).
+  const urls = (lhr ?? {}) as { mainDocumentUrl?: unknown; finalDisplayedUrl?: unknown };
+  const measured = urls.mainDocumentUrl ?? urls.finalDisplayedUrl;
+  if (!sameUrl(measured, target.url)) throw new FatalError(`Lighthouse measured ${String(measured)} instead of ${target.url}`);
   return parseLighthouseResult(lhr);
+}
+
+function sameUrl(a: unknown, b: string): boolean {
+  if (typeof a !== 'string' || !URL.canParse(a)) return false;
+  return new URL(a).href === new URL(b).href;
 }
 
 export async function stopSandbox(handle: SandboxHandle): Promise<void> {

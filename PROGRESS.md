@@ -2,12 +2,12 @@
 
 ## Status — 2026-10-10
 - **Milestone:** 1 (plan a POC), phase P3 (workflow + surfaces) on branch `m1/p3-workflow`, in review.
-- **Last completed:** P3 code, review round 1 fixes. `pocWorkflow` (plan mode): intake, baseline (cache hit
+- **Last completed:** P3 code, review rounds 1–2 fixes. `pocWorkflow` (plan mode): intake, baseline (cache hit
   or one Sandbox with three per-step Lighthouse runs), analyze (cap-checked, one retry on a retryable
   failure), criteria gate on a Workflow hook with the Telegram card, report (`bundle.json` + `report.md`),
-  `runs/index.json` row, alert on failure or cap. `/api/poc` admin route, `pnpm poc` CLI. Web 80 tests,
+  `runs/index.json` row, alert on failure or cap. `/api/poc` admin route, `pnpm poc` CLI. Web 82 tests,
   poc-core 170; 14 mutations of the key guards all caught; full turbo check green. Not yet pushed.
-- **Next step:** codex-review round 2 on P3, then push and open the P3 PR (Alex confirms the push). Then
+- **Next step:** codex-review round 3 on P3, then push and open the P3 PR (Alex confirms the push). Then
   P4: re-point the Telegram webhook to the P3 branch alias, set `MODEL_MODE=live` on Preview, one live
   BYOK plan run on `prospect-landing`, the M1 Verify list, the M1 report.
 - **Blockers:** none. Open decision for Alex: the first Git deploy (c48c65e) is still the production
@@ -18,17 +18,22 @@
 - Spend: the 24-hour spend is read in its own step right before each analyze call, and an analyze attempt
   that did not return is charged its worst case (it may have paid). In-flight runs are still invisible to
   other runs' 24-hour check until they end (plan design choice 2); each is bounded by its $1.50 cap.
-  Reserving spend per call would need a write before every model call; not done.
+  Reserving spend per call would need a write before every model call; not done. A runtime retry of the
+  analyze step reuses the reading taken just before it (seconds old; still bounded by the per-run cap).
 - Plan-mode Reject at the criteria gate ends `rejected` with `rejectReason: criteria_rejected`.
 - A not-allowlisted request is reported under `pocs/_unlisted/<runId>/` and indexed with target
   `_unlisted`; an allowlisted run that fails later keeps its target name.
 - `/api/poc` approve/reject works on previews with the admin token plus the protection bypass secret,
   for the local-world and kill-the-dev-server tests. Replace it with `approve_poc_gate` before M2's
   approval starts a build.
-- Lighthouse results are refused unless `finalDisplayedUrl` equals the target URL (Chrome follows
-  redirects that intake refuses). Lighthouse still runs with `sudo`, as in the P1 spike.
-- The `pnpm poc` CLI sends its secrets only to localhost or an `https://*-akim-projects.vercel.app`
+- Lighthouse results are refused unless `mainDocumentUrl` (else `finalDisplayedUrl`) is the target URL
+  (Chrome follows redirects that intake refuses). Lighthouse still runs with `sudo`, as in the P1 spike.
+- The `pnpm poc` CLI sends its secrets only to localhost or an `https://v-copilot-*-akim-projects.vercel.app`
   deployment, and refuses redirects.
+- A not-allowlisted run whose report write fails stays `rejected` (a report for an unlisted target can be
+  nothing else); any run whose report write fails sends the alert.
+- Spec wording only, in Decisions: callback data carries "the run ID" (the full ID, 53 of 64 bytes), not
+  "a short run ID".
 - Deferred: remove the P1 spike gate (`/api/spike`, `workflows/spike-gate.ts`, `sa`/`sr`) once the criteria
   gate passes live in P4; give the `spikes` workspace a typecheck script; `alertStep` and the card post can
   repeat on a step retry (rare; the card pattern keeps only one pressable card).

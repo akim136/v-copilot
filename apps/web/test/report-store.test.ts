@@ -122,9 +122,9 @@ describe('blobStore', () => {
     expect(blob.get).toHaveBeenCalledWith('runs/index.json', { access: 'private', useCache: false });
   });
 
-  it('refuses a read without an etag, which would make the next guarded write a blind overwrite', async () => {
-    blob.get.mockResolvedValueOnce({ statusCode: 200, stream: new Response('{}').body, blob: { etag: '' } });
-    await expect(blobStore().read('runs/index.json')).rejects.toThrow(/etag/);
+  it('refuses a guarded write with an empty etag, which Blob would send as an unguarded overwrite', async () => {
+    await expect(blobStore().write('runs/index.json', '[]', { contentType: 'application/json', mode: { ifMatch: '' } })).rejects.toThrow(/etag/);
+    expect(blob.put).not.toHaveBeenCalled();
   });
 
   it('writes private blobs at fixed paths, create-only or guarded by the etag, and never lists', async () => {
