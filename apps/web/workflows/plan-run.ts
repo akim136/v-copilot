@@ -170,12 +170,13 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
   try {
     await d.recordRun(row);
   } catch (err) {
-    // New runs still start; the alert carries what is needed to add the row by hand.
+    // The missing row alone blocks nothing (an unreadable index does, and its cause says so); the alert
+    // carries what is needed to add the row by hand.
     await d.alert([
       `v-copilot run ${d.runId} (${targetName ?? 'not allowlisted'}): its row is missing from runs/index.json.`,
       `Cause: ${messageOf(err)}`,
       `Report status: ${status}${rejectReason ? ` (${rejectReason})` : ''}. The workflow run fails on this write; the report stands.`,
-      `Until the row is added, the 24-hour spend total is ${usd(costUsd, 4)} low. New runs are not blocked.`,
+      `Until the row is added, the 24-hour spend total is ${usd(costUsd, 4)} low. The missing row alone does not block new runs.`,
       `Row to add: ${JSON.stringify(row)}`,
     ].join('\n')).catch(() => {});
     throw err;

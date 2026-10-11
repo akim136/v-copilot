@@ -36,7 +36,7 @@ export async function recordRun(store: Store, row: RunIndexRow): Promise<void> {
     const current = await store.read(RUN_INDEX_PATH).catch((err: unknown) => {
       throw new RunIndexWriteError(`Blob read of ${RUN_INDEX_PATH} failed: ${messageOf(err)}`, { cause: err });
     });
-    const rows = parseIndex(current?.body ?? null, 'it was left as is', RunIndexWriteError);
+    const rows = parseIndex(current?.body ?? null, 'it was left as is and new runs are refused until it is repaired', RunIndexWriteError);
     const body = serializeRunIndex(upsertRunIndexRow(rows, row));
     try {
       await store.write(RUN_INDEX_PATH, body, { contentType: 'application/json', mode: current ? { ifMatch: current.etag } : 'create' });

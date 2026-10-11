@@ -181,7 +181,7 @@ describe('planRun', () => {
       `v-copilot run ${RUN} (prospect-landing): its row is missing from runs/index.json.`,
       'Cause: RunIndexWriteError: runs/index.json changed between read and write on all 5 attempts',
       'Report status: planned. The workflow run fails on this write; the report stands.',
-      'Until the row is added, the 24-hour spend total is $0.0205 low. New runs are not blocked.',
+      'Until the row is added, the 24-hour spend total is $0.0205 low. The missing row alone does not block new runs.',
       `Row to add: ${JSON.stringify(recordRun.mock.calls[0]![0])}`,
     ].join('\n')]);
   });

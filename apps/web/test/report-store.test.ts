@@ -112,9 +112,9 @@ describe('recordRun', () => {
 
   it('leaves an unreadable index as is and names what is wrong with it', async () => {
     const bad = memoryStore({ [RUN_INDEX_PATH]: 'not json' });
-    await expect(recordRun(bad.store, row('wrun_B'))).rejects.toThrow(/^runs\/index\.json is unreadable, so it was left as is: SyntaxError: /);
+    await expect(recordRun(bad.store, row('wrun_B'))).rejects.toThrow(/^runs\/index\.json is unreadable, so it was left as is and new runs are refused until it is repaired: SyntaxError: /);
     const shape = memoryStore({ [RUN_INDEX_PATH]: JSON.stringify({ version: 1, rows: [{ runId: 'wrun_A' }] }) });
-    await expect(recordRun(shape.store, row('wrun_B'))).rejects.toThrow(/^runs\/index\.json is unreadable, so it was left as is: rows\.0\.target: /);
+    await expect(recordRun(shape.store, row('wrun_B'))).rejects.toThrow(/^runs\/index\.json is unreadable, so it was left as is and new runs are refused until it is repaired: rows\.0\.target: /);
     expect([...bad.writes(), ...shape.writes()]).toEqual([]);
   });
 
