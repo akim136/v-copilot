@@ -31,23 +31,25 @@ async function awaitCriteria(card: CriteriaCard): Promise<GateDecision> {
 export async function pocWorkflow(input: PocInput): Promise<PlanOutcome> {
   'use workflow';
   const { workflowRunId: runId } = getWorkflowMetadata();
+  // planRun calls these as methods, and the Workflow SDK serializes a step's `this`. Each step is wrapped so it
+  // is called as a plain function: this object holds functions and can't be serialized.
   return planRun(input, {
     runId,
     now: () => new Date().toISOString(),
     clock: () => Date.now(),
-    resolveTarget: resolveTargetStep,
-    intake: intakeStep,
-    readCachedBaseline: readCachedBaselineStep,
+    resolveTarget: (target) => resolveTargetStep(target),
+    intake: (req) => intakeStep(req),
+    readCachedBaseline: (targetName) => readCachedBaselineStep(targetName),
     startSandbox: () => startSandboxStep(runId),
-    lighthouse: lighthouseStep,
-    stopSandbox: stopSandboxStep,
-    psiField: psiFieldStep,
-    saveBaseline: saveBaselineStep,
-    readDailySpend: readDailySpendStep,
-    analyze: analyzeStep,
+    lighthouse: (handle, targetName, index) => lighthouseStep(handle, targetName, index),
+    stopSandbox: (handle) => stopSandboxStep(handle),
+    psiField: (targetName) => psiFieldStep(targetName),
+    saveBaseline: (req) => saveBaselineStep(req),
+    readDailySpend: () => readDailySpendStep(),
+    analyze: (req) => analyzeStep(req),
     awaitCriteria,
-    writeReport: writeReportStep,
-    recordRun: recordRunStep,
-    alert: alertStep,
+    writeReport: (req) => writeReportStep(req),
+    recordRun: (row) => recordRunStep(row),
+    alert: (text) => alertStep(text),
   });
 }

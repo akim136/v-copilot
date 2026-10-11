@@ -35,6 +35,8 @@ export async function startSandbox(runId: string): Promise<SandboxHandle> {
     source: { type: 'snapshot', snapshotId: SANDBOX_SNAPSHOT_ID },
     resources: { vcpus: SANDBOX_VCPUS },
     timeout: SANDBOX_TIMEOUT_MS,
+    // A persistent Sandbox keeps a 1.6 GB snapshot of itself when stopped, for 30 days, against Hobby's 15 GB.
+    persistent: false,
   });
   let chromePath: string;
   try {
@@ -45,8 +47,8 @@ export async function startSandbox(runId: string): Promise<SandboxHandle> {
     // A retry would find the same snapshot.
     if (find.exitCode !== 0 || !chromePath) throw new FatalError('Chromium not found in the Sandbox snapshot');
   } catch (err) {
-    // The step gets no handle to stop, so stop the Sandbox here rather than leave it to time out.
-    await sbx.stop().catch(() => {});
+    // The step gets no handle to remove, so remove the Sandbox here rather than leave it to time out.
+    await removeSandbox(sbx).catch(() => {});
     throw err;
   }
   return { name: sbx.name, chromePath };
@@ -76,7 +78,17 @@ function sameUrl(a: unknown, b: string): boolean {
 }
 
 export async function stopSandbox(handle: SandboxHandle): Promise<void> {
-  await (await Sandbox.get({ name: handle.name })).stop();
+  await removeSandbox(await Sandbox.get({ name: handle.name }));
+}
+
+// Stopped, then deleted so no stopped Sandbox piles up. deleteOrphanSnapshots stays off: the shared Chromium
+// snapshot must never go with it.
+async function removeSandbox(sbx: Sandbox): Promise<void> {
+  try {
+    await sbx.stop();
+  } finally {
+    await sbx.delete();
+  }
 }
 
 // Field data is context only: a PSI failure leaves it out rather than failing the run.

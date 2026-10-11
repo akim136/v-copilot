@@ -41,7 +41,8 @@ Work one milestone at a time, keep each session small, and leave the repo green.
 - `pnpm install`
 - `pnpm turbo build typecheck lint test --force` — full check, bypasses cache
 - `pnpm --filter @v-copilot/fixtures build:pages` — build fixtures into `fixtures/prospects/dist`
-- `pnpm --filter @v-copilot/web dev` — local dev (Local World in `apps/web/.workflow-data/`)
+- `pnpm --filter @v-copilot/web dev` — local dev (Local World in `apps/web/.next/workflow-data/`; a run
+  interrupted mid-step resumes after a restart once the step's 860 s lease ends)
 - `pnpm poc start <target> --brief "..." --mode plan` — start a run (added in M1·P3)
 
 ## End of every session

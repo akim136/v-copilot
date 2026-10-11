@@ -3,16 +3,11 @@ import { HookNotFoundError } from 'workflow/errors';
 import { CRITERIA_BUTTONS, criteriaToken, type GateDecision } from '@/lib/gates';
 import { RUN_ID } from '@/lib/run-id';
 import { getBot, isAlex } from '@/lib/telegram';
-import { spikeToken, type SpikeDecision } from '@/workflows/spike-gate';
 
 // Button ID → resume the hook it belongs to with the decision it carries.
-const spike = (decision: SpikeDecision['decision']) => (runId: string, userId: string) =>
-  resumeHook(spikeToken(runId), { decision, userId } satisfies SpikeDecision);
 const criteria = (decision: GateDecision['decision']) => (runId: string, userId: string) =>
   resumeHook(criteriaToken(runId), { decision, userId, via: 'telegram' } satisfies GateDecision);
 const BUTTONS: Record<string, (runId: string, userId: string) => Promise<unknown>> = {
-  sa: spike('approve'),
-  sr: spike('reject'),
   [CRITERIA_BUTTONS.approve]: criteria('approve'),
   [CRITERIA_BUTTONS.reject]: criteria('reject'),
 };

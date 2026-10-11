@@ -12,6 +12,7 @@ const sbx = vi.hoisted(() => ({
   commands: [] as { cmd: string; args: string[]; env?: Record<string, string>; sudo?: boolean }[],
   created: [] as unknown[],
   stopped: 0,
+  deleted: [] as unknown[],
   lighthouseExit: 0,
   findThrows: false,
   chrome: '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n',
@@ -28,6 +29,7 @@ vi.mock('@vercel/sandbox', () => {
     },
     readFileToBuffer: async () => sbx.result ?? lhr,
     stop: async () => void sbx.stopped++,
+    delete: async (opts?: unknown) => void sbx.deleted.push(opts),
   });
   return {
     Sandbox: {
@@ -50,6 +52,7 @@ describe('baseline', () => {
     sbx.commands = [];
     sbx.created = [];
     sbx.stopped = 0;
+    sbx.deleted = [];
     sbx.lighthouseExit = 0;
     sbx.chrome = '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome\n';
     sbx.result = undefined;
@@ -60,7 +63,8 @@ describe('baseline', () => {
     const handle = await startSandbox(RUN);
     expect(handle).toEqual({ name: sandboxName(RUN), chromePath: '/root/.cache/ms-playwright/chromium-1/chrome-linux/chrome' });
     expect(sandboxName(RUN)).toMatch(/^poc-wrun-[0-9a-z]{26}$/);
-    expect(sbx.created).toEqual([expect.objectContaining({ name: sandboxName(RUN), source: { type: 'snapshot', snapshotId: SANDBOX_SNAPSHOT_ID } })]);
+    // Not persistent: a persistent Sandbox keeps a 1.6 GB snapshot of itself when stopped.
+    expect(sbx.created).toEqual([expect.objectContaining({ name: sandboxName(RUN), source: { type: 'snapshot', snapshotId: SANDBOX_SNAPSHOT_ID }, persistent: false })]);
   });
 
   it('runs Lighthouse with the URL as an argument and parses all nine metrics', async () => {
@@ -113,17 +117,19 @@ describe('baseline', () => {
     await expect(saveBaseline(store, target, { targetName: target.name, runs: [run, run, run], measuredAt })).resolves.toMatchObject({ runs: [run.metrics, run.metrics, run.metrics] });
   });
 
-  it('stops the Sandbox and gives up when the snapshot has no Chromium', async () => {
+  it('removes the Sandbox and gives up when the snapshot has no Chromium', async () => {
     sbx.chrome = '';
     const err = await startSandbox(RUN).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FatalError);
     expect(sbx.stopped).toBe(1);
+    expect(sbx.deleted).toHaveLength(1);
   });
 
-  it('stops the Sandbox when the Chromium lookup itself fails', async () => {
+  it('removes the Sandbox when the Chromium lookup itself fails', async () => {
     sbx.findThrows = true;
     await expect(startSandbox(RUN)).rejects.toThrow('sandbox unreachable');
     expect(sbx.stopped).toBe(1);
+    expect(sbx.deleted).toHaveLength(1);
   });
 
   it('refuses a measurement whose main document was not the target', async () => {
@@ -137,9 +143,11 @@ describe('baseline', () => {
     await expect(runLighthouse({ name: 'poc-x', chromePath: '/chrome' }, target, 0)).resolves.toMatchObject({ lighthouseVersion: '13.5.0' });
   });
 
-  it('stops the Sandbox by name', async () => {
+  it('stops and removes the Sandbox by name, leaving snapshots alone', async () => {
     await stopSandbox({ name: 'poc-x', chromePath: '/chrome' });
     expect(sbx.stopped).toBe(1);
+    // deleteOrphanSnapshots stays off, so the shared Chromium snapshot can never be removed with it.
+    expect(sbx.deleted).toEqual([undefined]);
   });
 
   it('leaves PSI field data out when PSI fails', async () => {

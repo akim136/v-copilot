@@ -20,7 +20,9 @@ export function blobStore(): Store {
     async read(path) {
       const res = await get(path, { access: 'private', useCache: false });
       if (!res || res.statusCode !== 200) return null;
-      return { body: await new Response(res.stream).text(), etag: res.blob.etag };
+      // A compressed response carries the etag as weak (W/"…"), which an ifMatch write never matches. The
+      // tag inside is the blob's own; if it ever weren't, the guarded write would conflict, not overwrite.
+      return { body: await new Response(res.stream).text(), etag: res.blob.etag.replace(/^W\//, '') };
     },
     async write(path, body, { contentType, mode }) {
       // Blob sends no condition for an empty ifMatch, which would make this an unguarded overwrite.

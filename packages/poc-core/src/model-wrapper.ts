@@ -106,11 +106,16 @@ export function worstCaseUsage(system: string, prompt: string): TokenUsage {
 }
 
 // Name, status and code only: SDK errors carry the full request and response bodies.
+// The error's own message, on one line and clipped: the request body is a separate field and never included.
+const MAX_REASON_CHARS = 200;
+
 function describeError(err: unknown): string {
-  const e = (typeof err === 'object' && err !== null ? err : {}) as { name?: unknown; statusCode?: unknown; code?: unknown };
+  const e = (typeof err === 'object' && err !== null ? err : {}) as { name?: unknown; statusCode?: unknown; code?: unknown; message?: unknown };
   const name = typeof e.name === 'string' ? e.name : 'Error';
   const detail = [typeof e.statusCode === 'number' ? `status ${e.statusCode}` : '', typeof e.code === 'string' ? e.code : ''].filter(Boolean);
-  return detail.length ? `${name} (${detail.join(', ')})` : name;
+  const head = detail.length ? `${name} (${detail.join(', ')})` : name;
+  const reason = typeof e.message === 'string' ? e.message.replace(/\s+/g, ' ').trim().slice(0, MAX_REASON_CHARS) : '';
+  return reason ? `${head}: ${reason}` : head;
 }
 
 // The one way any step calls a model: caps first, structured output only, no tools.
