@@ -1,6 +1,6 @@
 import { costUsd, MODELS, parseRunIndex, parseTargetsConfig, RUN_INDEX_PATH, serializeRunIndex, type Baseline, type RunIndexRow, type Span } from '@v-copilot/poc-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { recordRun } from '@/lib/poc/run-index';
+import { readDailySpend, recordRun, RunIndexWriteError } from '@/lib/poc/run-index';
 import { runDir, writeReport } from '@/lib/poc/report';
 import type { ReportRequest } from '@/lib/poc/types';
 import { memoryStore } from './fakes';
@@ -100,15 +100,38 @@ describe('recordRun', () => {
     expect(parseRunIndex(mem.objects.get(RUN_INDEX_PATH)!.body).map((r) => r.runId)).toEqual(['wrun_A', 'wrun_OTHER', 'wrun_B']);
   });
 
-  it('gives up after five conflicts, and refuses to overwrite an unreadable index', async () => {
+  it('gives up after five conflicts and says so', async () => {
     const mem = memoryStore({ [RUN_INDEX_PATH]: serializeRunIndex([]) });
     mem.onBeforeWrite(() => mem.objects.set(RUN_INDEX_PATH, { body: serializeRunIndex([]), etag: `"x${Math.random()}"`, contentType: 'application/json' }));
-    await expect(recordRun(mem.store, row('wrun_B'))).rejects.toBeInstanceOf(StoreConflictError);
+    const err = await recordRun(mem.store, row('wrun_B')).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RunIndexWriteError);
+    expect((err as Error).message).toBe('runs/index.json changed between read and write on all 5 attempts');
+    expect((err as Error).cause).toBeInstanceOf(StoreConflictError);
     expect(mem.writes()).toHaveLength(5);
+  });
 
+  it('leaves an unreadable index as is and names what is wrong with it', async () => {
     const bad = memoryStore({ [RUN_INDEX_PATH]: 'not json' });
-    await expect(recordRun(bad.store, row('wrun_B'))).rejects.toThrow();
-    expect(bad.writes()).toEqual([]);
+    await expect(recordRun(bad.store, row('wrun_B'))).rejects.toThrow(/^runs\/index\.json is unreadable, so it was left as is: SyntaxError: /);
+    const shape = memoryStore({ [RUN_INDEX_PATH]: JSON.stringify({ version: 1, rows: [{ runId: 'wrun_A' }] }) });
+    await expect(recordRun(shape.store, row('wrun_B'))).rejects.toThrow(/^runs\/index\.json is unreadable, so it was left as is: rows\.0\.target: /);
+    expect([...bad.writes(), ...shape.writes()]).toEqual([]);
+  });
+
+  it('names a Blob read or write that failed, and does not retry it', async () => {
+    const mem = memoryStore();
+    const write = vi.fn(async () => { throw new TypeError('fetch failed'); });
+    await expect(recordRun({ ...mem.store, write }, row('wrun_B'))).rejects.toThrow(new RunIndexWriteError('Blob write of runs/index.json failed: TypeError: fetch failed'));
+    expect(write).toHaveBeenCalledTimes(1);
+    const read = async () => { throw new Error('store suspended'); };
+    await expect(recordRun({ ...mem.store, read }, row('wrun_B'))).rejects.toThrow(new RunIndexWriteError('Blob read of runs/index.json failed: Error: store suspended'));
+  });
+});
+
+describe('readDailySpend', () => {
+  it('fails closed on an unreadable index, naming it', async () => {
+    const bad = memoryStore({ [RUN_INDEX_PATH]: 'not json' });
+    await expect(readDailySpend(bad.store, new Date())).rejects.toThrow(/^runs\/index\.json is unreadable, so the 24-hour spend can't be checked: SyntaxError: /);
   });
 });
 

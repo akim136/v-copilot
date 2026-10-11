@@ -172,10 +172,27 @@ describe('planRun', () => {
     expect(calls.rows).toEqual([expect.objectContaining({ status: 'failed', target: 'prospect-landing' })]);
   });
 
-  it('alerts and fails when the index cannot be written', async () => {
-    const { d, calls } = fakeDeps({ recordRun: vi.fn(async () => { throw new Error('conflict after 5 attempts'); }) });
-    await expect(planRun(input, d)).rejects.toThrow('conflict after 5 attempts');
-    expect(calls.alerts).toEqual([expect.stringMatching(/runs\/index\.json/)]);
+  it('alerts with the cause, the missing spend and the row to add when the index cannot be written', async () => {
+    const err = Object.assign(new Error('runs/index.json changed between read and write on all 5 attempts'), { name: 'RunIndexWriteError' });
+    const recordRun = vi.fn(async (_row: RunIndexRow) => { throw err; });
+    const { d, calls } = fakeDeps({ recordRun, analyze: vi.fn(async (): Promise<AnalyzeResult> => ({ ok: true, spans: [span(0.0205)], analysis })) });
+    await expect(planRun(input, d)).rejects.toBe(err);
+    expect(calls.alerts).toEqual([[
+      `v-copilot run ${RUN} (prospect-landing): its row is missing from runs/index.json.`,
+      'Cause: RunIndexWriteError: runs/index.json changed between read and write on all 5 attempts',
+      'Report status: planned. The workflow run fails on this write; the report stands.',
+      'Until the row is added, the 24-hour spend total is $0.0205 low. New runs are not blocked.',
+      `Row to add: ${JSON.stringify(recordRun.mock.calls[0]![0])}`,
+    ].join('\n')]);
+  });
+
+  it('names the rejection in the index alert of a rejected run', async () => {
+    const { d, calls } = fakeDeps({
+      awaitCriteria: vi.fn(async (): Promise<GateDecision> => ({ ...approve, decision: 'reject' })),
+      recordRun: vi.fn(async () => { throw new Error('down'); }),
+    });
+    await expect(planRun(input, d)).rejects.toThrow('down');
+    expect(calls.alerts).toEqual([expect.stringContaining('\nReport status: rejected (criteria_rejected). ')]);
   });
 
   it('treats a failed report write on a finished run as a failure', async () => {

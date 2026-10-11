@@ -24,14 +24,14 @@
   gateway's reason; 2744924 run Sandbox `persistent: false` and deleted; 4a603bc index writes use the strong
   etag (`get()` returns `W/"…"` once the object is compressed at 1 KB, so every guarded write conflicted);
   `instrumentation.ts` starts the Local World so a killed dev server's runs are re-queued; P1 spike gate removed.
-- **Next step:** Alex reviews and merges PR #5 (codex-review approve, 0 blocking; CI green) and confirms the M1
-  report; then Milestone 2.
+- **Next step:** PR for `m1/index-write-errors`; then Alex confirms the M1 report (PR #5 merged as 857561d)
+  before Milestone 2.
 - **Blockers:** none. BYOK works on akim-projects after Alex's $10 Gateway top-up.
-- **Open for Alex:** delete the four disposable Sandbox snapshots (only `snap_lPPlYw…` is needed; they expire in
-  ~30 days); remove `MODEL_MODE` for branch `m1/p3-workflow` (optional); production deployment c48c65e is still
-  the first Git deploy (protected, no sensitive vars). Decide whether a failed index write should block new runs:
-  today the alert fires but that run's spend is missing from the 24-hour total until its row is written (run
-  …88QF's row was added by hand).
+- **Open for Alex:** remove `MODEL_MODE` for branch `m1/p3-workflow` (optional); production deployment c48c65e is
+  still the first Git deploy (protected, no sensitive vars).
+- **Decided 2026-10-11:** a failed index write does not block new runs; its alert names the cause, the spend
+  missing from the 24-hour total and the row to add by hand (branch `m1/index-write-errors`). The four
+  disposable Sandbox snapshots are deleted; only `snap_lPPlYw…` remains (1.6 GB).
 - **Model spend to date:** $0.087 measured over four completed calls ($0.0289, $0.0205, $0.0226, $0.0153), plus
   the killed attempt, charged $0.2258 worst case (actual unknown). BYOK bills Alex's OpenAI project directly;
   Gateway credits are untouched (`/v1/credits`: balance 15, used 0). The index carries $0.79 over 24 hours,

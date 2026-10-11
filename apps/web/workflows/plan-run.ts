@@ -35,7 +35,7 @@ export interface PlanDeps {
   alert: (text: string) => Promise<void>;
 }
 
-const usd = (n: number) => `$${n.toFixed(2)}`;
+const usd = (n: number, digits = 2) => `$${n.toFixed(digits)}`;
 const sum = (spans: readonly Span[]) => spans.reduce((total, s) => total + s.costUsd, 0);
 const messageOf = (err: unknown) => (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
 
@@ -170,7 +170,14 @@ export async function planRun(input: PocInput, d: PlanDeps): Promise<PlanOutcome
   try {
     await d.recordRun(row);
   } catch (err) {
-    await d.alert(`v-copilot run ${d.runId}: could not write runs/index.json. ${messageOf(err)}`).catch(() => {});
+    // New runs still start; the alert carries what is needed to add the row by hand.
+    await d.alert([
+      `v-copilot run ${d.runId} (${targetName ?? 'not allowlisted'}): its row is missing from runs/index.json.`,
+      `Cause: ${messageOf(err)}`,
+      `Report status: ${status}${rejectReason ? ` (${rejectReason})` : ''}. The workflow run fails on this write; the report stands.`,
+      `Until the row is added, the 24-hour spend total is ${usd(costUsd, 4)} low. New runs are not blocked.`,
+      `Row to add: ${JSON.stringify(row)}`,
+    ].join('\n')).catch(() => {});
     throw err;
   }
   if (thrown) throw thrown.err;
